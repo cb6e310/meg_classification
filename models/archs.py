@@ -172,6 +172,7 @@ class TimeNet(BaseNet):
         channel_2 = cfg.MODEL.ARGS.CHANNEL_2
         kernel_size_1 = cfg.MODEL.ARGS.KERNEL_SIZE_1
         kernel_size_2 = cfg.MODEL.ARGS.KERNEL_SIZE_2
+        dropout = cfg.MODEL.ARGS.DROP_OUT
         batch_norm_flag = cfg.MODEL.ARGS.BATCH_NORM_FLAG
 
         # sources_channels = cfg.MODEL.ARGS.SOURCE_CHANNELS
@@ -214,7 +215,7 @@ class TimeNet(BaseNet):
                     ),
                     ("relu2", nn.ReLU(inplace=True)),
                     ("maxpool", nn.MaxPool1d(max_pool)),
-                    ("dropout", nn.Dropout(0.5)),
+                    ("dropout", nn.Dropout(p=dropout)),
                     ("flatten", TensorView()),
                     (
                         "linear",
@@ -228,3 +229,4 @@ class TimeNet(BaseNet):
         out = self.net(x)
         loss = self.compute_loss(out, target)
         return out, loss
+

@@ -3,7 +3,8 @@ EXPERIMENT:
   TAG: "setting1"
   PROJECT: "base project"
   DEBUG: True
-  REPETITION_NUM: 1 # Number of repetition times
+  SEED: 1234
+  REPETITION_NUM: 5 # Number of repetition times
 DATASET:
   TYPE: "CamCAN"
   CHANNELS: 204
@@ -19,8 +20,9 @@ MODEL:
     KERNEL_SIZE_1: 7
     KERNEL_SIZE_2: 7
     MAX_POOL: 2
+    DROP_OUT: 0.2
     BATCH_NORM_FLAG: True
 SOLVER:
   BATCH_SIZE: 1024
-  EPOCHS: 50
+  EPOCHS: 100
   LR: 0.001
