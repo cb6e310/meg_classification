@@ -41,7 +41,7 @@ class VARCNN(BaseNet):
                     ("Spatial", nn.Linear(meg_channels, sources_channels)),
                     ("transpose1", Transpose(1, 2)),
                     (
-                        "Temporal_LF",
+                        "Temporal_VAR",
                         Conv(
                             in_channels=sources_channels,
                             out_channels=sources_channels,

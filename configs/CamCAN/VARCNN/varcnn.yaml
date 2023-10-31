@@ -1,9 +1,8 @@
 EXPERIMENT:
-  NAME: "timenet"
-  TAG: "setting1"
+  NAME: "varcnn"
+  TAG: "reproduce"
   PROJECT: "base project"
   DEBUG: True
-  SEED: 1234
   REPETITION_NUM: 5 # Number of repetition times
 DATASET:
   TYPE: "CamCAN"
@@ -15,13 +14,9 @@ DATASET:
 MODEL:
   TYPE: "TimeNet"
   ARGS:
-    CHANNEL_1: 32
-    CHANNEL_2: 64
-    KERNEL_SIZE_1: 7
-    KERNEL_SIZE_2: 7
     MAX_POOL: 2
-    DROP_OUT: 0.2
-    BATCH_NORM_FLAG: True
+    DROP_OUT: 0.5
+    SOURCE_CHANNELS: 36
 SOLVER:
   BATCH_SIZE: 128
   EPOCHS: 100
