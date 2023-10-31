@@ -9,6 +9,7 @@ def show_cfg(cfg):
     dump_cfg = CN()
     dump_cfg.EXPERIMENT = cfg.EXPERIMENT
     dump_cfg.DATASET = cfg.DATASET
+    dump_cfg.MODEL = cfg.MODEL
     dump_cfg.SOLVER = cfg.SOLVER
     dump_cfg.LOG = cfg.LOG
     print(log_msg("CONFIG:\n{}".format(dump_cfg.dump()), "INFO"))

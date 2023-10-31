@@ -1,0 +1,18 @@
+EXPERIMENT:
+  NAME: "debug"
+  TAG: ""
+  PROJECT: ""
+  DEBUG: True
+  REPETITION_NUM: 1  # Number of repetition times
+DATASET:
+  TYPE: "CIFAR10"
+  ROOT: ""
+  CHANNELS: 204
+  POINTS: 100
+  NUM_CLASSES: 10
+MODEL:
+  TYPE: "ResNet18"
+SOLVER:
+  BATCH_SIZE: 128
+  EPOCHS: 100
+  LR: 0.001

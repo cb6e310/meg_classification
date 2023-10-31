@@ -20,6 +20,8 @@ from utils.dataset import get_data_loader_from_dataset
 from trainers import trainer_dict
 from models import model_dict
 
+from loguru import logger
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("training for knowledge distillation.")
@@ -58,19 +60,20 @@ if __name__ == "__main__":
     for repetition_id in range(cfg.EXPERIMENT.REPETITION_NUM):
         # set the random number seed
         setup_seed(cfg.EXPERIMENT.SEED + repetition_id)
-
         # init dataloader & models
         train_loader = get_data_loader_from_dataset(
             cfg.DATASET.ROOT
             + "/{}".format(cfg.DATASET.TYPE)
-            + "/{}_train.npz".format(cfg.DATASET.TYPE),
-            cfg.SOLVER.BATCH_SIZE,
+            + "/train",
+            train=True,
+            batch_size=cfg.SOLVER.BATCH_SIZE,
         )
         val_loader = get_data_loader_from_dataset(
             cfg.DATASET.ROOT
             + "/{}".format(cfg.DATASET.TYPE)
-            + "/{}_test.npz".format(cfg.DATASET.TYPE),
-            cfg.DATASET.TEST.BATCH_SIZE,
+            + "/test",
+            train=False,
+            batch_size=cfg.DATASET.TEST.BATCH_SIZE,
         )
 
         model = model_dict[cfg.MODEL.TYPE][0](cfg)

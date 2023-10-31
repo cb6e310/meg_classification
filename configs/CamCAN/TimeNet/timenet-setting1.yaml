@@ -1,7 +1,7 @@
 EXPERIMENT:
-  NAME: "debug"
-  TAG: ""
-  PROJECT: ""
+  NAME: "timenet"
+  TAG: "setting1"
+  PROJECT: "base project"
   DEBUG: True
   REPETITION_NUM: 1 # Number of repetition times
 DATASET:
@@ -14,9 +14,13 @@ DATASET:
 MODEL:
   TYPE: "TimeNet"
   ARGS:
-    SOURCE_CHANNELS: 36
+    CHANNEL_1: 32
+    CHANNEL_2: 64
+    KERNEL_SIZE_1: 7
+    KERNEL_SIZE_2: 7
     MAX_POOL: 2
+    BATCH_NORM_FLAG: True
 SOLVER:
   BATCH_SIZE: 1024
-  EPOCHS: 100
+  EPOCHS: 50
   LR: 0.001

@@ -18,3 +18,4 @@ __pycache__/
 *.so
 
 /wandb
+/data
