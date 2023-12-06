@@ -3,6 +3,7 @@
 - Set some hard coded parameters in the config file, like the specific hyper-parameters for the model.
 - Set the general parameters in the config file, like the path of the dataset.
 - Check for your checkpoint demand in the config file. 
+- Check the task type in the config file, like the self-supervised learning or the supervised learning.
 
 ## Training Cmd
 
