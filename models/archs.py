@@ -1,14 +1,20 @@
 from models.blocks import *
+from models.losses import *
 from collections import OrderedDict
 
 import torchvision.models as models
 
 from loguru import logger
 
+backbone_dict = {
+    "resnet18": models.resnet18,
+    "resnet34": models.resnet34,
+    "resnet50": models.resnet50,
+}
 
 class BaseNet(nn.Module):
     def __init__(self, cfg):
-        super().__init__()
+        super(BaseNet, self).__init__()
         self.cfg = cfg
 
     def forward(self, x):
@@ -113,53 +119,6 @@ class LFCNN(BaseNet):
         return self.net(x)
 
 
-class ResNet18(BaseNet):
-    def __init__(self, cfg):
-        super().__init__(cfg)
-        meg_channels = cfg.DATASET.CHANNELS
-        points_length = cfg.DATASET.POINTS
-        num_classes = cfg.DATASET.NUM_CLASSES
-
-        # sources_channels = cfg.MODEL.ARGS.SOURCE_CHANNELS
-
-        batch_size = cfg.SOLVER.BATCH_SIZE
-
-        self.inchannel = 64
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-        )
-        self.layer1 = self.make_layer(ResidualBlock, 64, 2, stride=1)
-        self.layer2 = self.make_layer(ResidualBlock, 128, 2, stride=2)
-        self.layer3 = self.make_layer(ResidualBlock, 256, 2, stride=2)
-        self.layer4 = self.make_layer(ResidualBlock, 512, 2, stride=2)
-        self.fc = nn.Linear(512 * 6 * 3, cfg.DATASET.NUM_CLASSES)
-
-    def make_layer(self, block, channels, num_blocks, stride):
-        strides = [stride] + [1] * (num_blocks - 1)
-        layers = []
-        for stride in strides:
-            layers.append(block(self.inchannel, channels, stride))
-            self.inchannel = channels
-        return nn.Sequential(*layers)
-
-    def forward(self, x, target=None):
-        x = x.unsqueeze(1)
-        out = self.conv1(x)
-        out = self.layer1(out)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
-        out = out.view(out.size(0), -1)
-        out = self.fc(out)
-
-        loss = self.compute_loss(out, target)
-
-        return out, loss
-
-
 class TimeNet(BaseNet):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -230,3 +189,49 @@ class TimeNet(BaseNet):
         loss = self.compute_loss(out, target)
         return out, loss
 
+
+class SimCLR(BaseNet):
+    def __init__(self, cfg):
+        super(SimCLR, self).__init__(cfg)
+        input_channels = cfg.DATASET.CHANNELS
+        num_classes = cfg.DATASET.NUM_CLASSES
+
+        backbone_name = cfg.MODEL.ARGS.BACKBONE
+        projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+
+        self.backbone = backbone_dict[backbone_name](pretrained=False)
+        self.backbone.conv1 = nn.Conv2d(
+            input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+        )
+        print(self.backbone)
+        self.projection_head = nn.Sequential(
+            nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features),
+            nn.ReLU(),
+            nn.Linear(self.backbone.fc.in_features, projection_dim),
+        )
+        self.backbone.fc = nn.Identity()
+
+        self.criterion = SupConLoss(cfg)
+        # self.criterion = contrastive_loss(cfg)
+
+        # self.fc = nn.Linear(projection_dim, num_classes)
+
+    def forward(self, x_i, x_j):
+        h_i = self.backbone(x_i)
+        h_j = self.backbone(x_j)
+
+        z_i = F.normalize(self.projection_head(h_i), dim=-1)
+        z_j = F.normalize(self.projection_head(h_j), dim=-1)
+        # logger.debug(z_i.shape)
+
+        loss = self.compute_loss(z_i, z_j)
+
+        return h_i, h_j, z_i, z_j, loss
+
+
+    def compute_loss(self, x_i, x_j):
+        x_i = torch.unsqueeze(x_i, 1)
+        x_j = torch.unsqueeze(x_j, 1)
+        features = torch.concatenate([x_i, x_j], axis=1)
+        # logger.debug(features.shape)
+        return self.criterion(features)

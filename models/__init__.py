@@ -11,12 +11,12 @@ model_dict = {
         VARCNN,
         ""
     ),
-    "ResNet18": (
-        ResNet18,
-        ""
-    ),
     "TimeNet": (
         TimeNet,
+        ""
+    ),
+    "SimCLR": (
+        SimCLR,
         ""
     ),
 }

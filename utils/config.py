@@ -41,8 +41,10 @@ CFG.EXPERIMENT.TAG = "default"
 CFG.EXPERIMENT.SEED = (
     0
 )  # Random number seed, which is beneficial to the repeatability of the experiment.
+CFG.EXPERIMENT.TASK = "train"  # train, test, pretext
 CFG.EXPERIMENT.DEBUG = False  # Debug mode
-CFG.EXPERIMENT.GPU_IDS = "0, 1"  # List of GPUs used
+CFG.EXPERIMENT.GPU_IDS = "0"  # List of GPUs used
+CFG.EXPERIMENT.WORLD_SIZE = 1  # Number of GPUs used
 CFG.EXPERIMENT.REPETITION_NUM = 5  # Number of repetition times
 CFG.EXPERIMENT.RESUME = False  # Resume training
 CFG.EXPERIMENT.CHECKPOINT = "" # 'Log_2020-03-19_19-53-27'

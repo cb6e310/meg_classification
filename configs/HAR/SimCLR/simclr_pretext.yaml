@@ -1,11 +1,12 @@
 EXPERIMENT:
   NAME: "simclr"
   TAG: "baselines"
-  PROJECT: "base project"
+  PROJECT: "debug project"
   DEBUG: True
   REPETITION_NUM: 5 # Number of repetition times
   TASK: "pretext"
 DATASET:
+  ROOT: "/home/song/datasets/timeseries/"
   TYPE: "HAR"
   CHANNELS: 9
   POINTS: 128
@@ -15,8 +16,10 @@ DATASET:
 MODEL:
   TYPE: "SimCLR"
   ARGS:
-    MAX_POOL: 2
-    DROP_OUT: 0.5
+    BACKBONE: "resnet50"
+    TEMPERATURE: 0.5
+    SIAMESE: True
+    PROJECTION_DIM: 128
     # SOURCE_CHANNELS: 36
 SOLVER:
   BATCH_SIZE: 128

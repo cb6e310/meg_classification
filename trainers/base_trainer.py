@@ -94,7 +94,7 @@ class BaseTrainer:
     def init_optimizer(self, cfg):
         if cfg.SOLVER.TYPE == "SGD":
             optimizer = optim.SGD(
-                self.model.module.get_learnable_parameters(),
+                self.model.parameters(),
                 lr=cfg.SOLVER.LR,
                 momentum=cfg.SOLVER.MOMENTUM,
                 weight_decay=cfg.SOLVER.WEIGHT_DECAY,
@@ -174,14 +174,17 @@ class BaseTrainer:
 
         # train loops
         self.model.train()
-        for idx, (data, target) in enumerate(self.train_loader):
-            msg = self.train_iter(data, target, epoch, train_meters, idx)
+        for idx, data in enumerate(self.train_loader):
+            msg = self.train_iter(data, epoch, train_meters, idx)
             pbar.set_description(log_msg(msg, "TRAIN"))
             pbar.update()
         pbar.close()
 
         # validate
-        test_acc, test_loss = validate(self.val_loader, self.model)
+        if self.cfg.EXPERIMENT.TASK == "pretext":
+            test_acc, test_loss = 0, 0
+        else:
+            test_acc, test_loss = validate(self.val_loader, self.model)
 
         # log
         log_dict = OrderedDict(
@@ -219,35 +222,56 @@ class BaseTrainer:
             )
             torch.save(state, chkp_path)
 
-    def train_iter(self, data, target, epoch, train_meters, data_itx: int = 0):
+    def train_iter(self, data, epoch, train_meters, data_itx: int = 0):
         self.optimizer.zero_grad()
         train_start_time = time.time()
 
         # train_meters["data_time"].update(time.time() - train_start_time)
-        data = data.float()
-        data = data.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True)
+        if self.cfg.MODEL.ARGS.SIAMESE:
+            _, _, x_i, x_j, _ = data
+            x_i = x_i.float()
+            x_j = x_j.float()
+            x_i = x_i.cuda(non_blocking=True)
+            x_j = x_j.cuda(non_blocking=True)
+            batch_size = x_i.size(0)
+            
+            # forward
+            _, _, _, _, loss = self.model(x_i, x_j)
+            loss = loss.mean()
+            print(loss)
+        else:
+            data, target = data
+            data = data.float()
+            data = data.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+            batch_size = data.size(0)
 
-        # forward
+            # forward
+            preds, loss = self.model(data, target)
+            loss = loss.mean()
 
-        preds, loss = self.model(data, target)
-        loss = loss.mean()
         # backward
-
         loss.backward()
         self.optimizer.step()
+
         train_meters["training_time"].update(time.time() - train_start_time)
-        # collect info
-        batch_size = data.size(0)
-        acc1, _ = accuracy(preds, target, topk=(1, 2))
         train_meters["losses"].update(loss.cpu().detach().numpy().mean(), batch_size)
-        train_meters["top1"].update(acc1[0], batch_size)
+        if not self.cfg.EXPERIMENT.TASK == "pretext":
+            acc1, _ = accuracy(preds, target, topk=(1, 2))
+            train_meters["top1"].update(acc1[0], batch_size)
+            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}".format(
+                epoch,
+                # train_meters["data_time"].avg,
+                train_meters["training_time"].avg,
+                train_meters["losses"].avg,
+                train_meters["top1"].avg,
+            )
         # print info
-        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}".format(
-            epoch,
-            # train_meters["data_time"].avg,
-            train_meters["training_time"].avg,
-            train_meters["losses"].avg,
-            train_meters["top1"].avg,
-        )
+        else:
+            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}".format(
+                epoch,
+                # train_meters["data_time"].avg,
+                train_meters["training_time"].avg,
+                train_meters["losses"].avg,
+            )
         return msg
