@@ -18,7 +18,7 @@ from utils.helpers import (
 from utils.dataset import get_data_loader_from_dataset
 
 from trainers import trainer_dict
-from models import model_dict
+from models import model_dict, criterion_dict
 
 from loguru import logger
 
@@ -27,12 +27,12 @@ from loguru import logger
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("training for knowledge distillation.")
     parser.add_argument("--cfg", type=str, default="")
-    parser.add_argument("opts", default=None, nargs=argparse.REMAINDER)
-
+    parser.add_argument("--opts", nargs="+", default=[])
     args = parser.parse_args()
     cfg.merge_from_file(args.cfg)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
+    
     ###############
     # Previous chkp
     ###############
@@ -77,9 +77,11 @@ if __name__ == "__main__":
         if cfg.EXPERIMENT.WORLD_SIZE > 1:
             model = torch.nn.DataParallel(model)
 
+        criterion = criterion_dict[cfg.MODEL.CRITERION.TYPE](cfg).cuda()
+
         # train
         trainer = trainer_dict[cfg.SOLVER.TRAINER](
-            experiment_name, model, train_loader, val_loader, cfg
+            experiment_name, model, criterion, train_loader, val_loader, cfg
         )
         best_acc = trainer.train(repetition_id=repetition_id)
         best_acc_l.append(float(best_acc))

@@ -1,10 +1,13 @@
 EXPERIMENT:
   NAME: "simclr"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True
+  PROJECT: "baseline project"
+  DEBUG: False 
   REPETITION_NUM: 5 # Number of repetition times
   TASK: "pretext"
+  RESUME : False  # Resume training
+  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
 DATASET:
   ROOT: "/home/song/datasets/timeseries/"
   TYPE: "HAR"
@@ -21,7 +24,17 @@ MODEL:
     SIAMESE: True
     PROJECTION_DIM: 128
     # SOURCE_CHANNELS: 36
+  CRITERION:
+    TYPE: "InfoNCE"
+    ARGS:
+      TEMPERATURE: 0.5
+      # SOURCE_CHANNELS: 36
 SOLVER:
-  BATCH_SIZE: 128
-  EPOCHS: 100
-  LR: 0.0003
+  BATCH_SIZE: 512
+  EPOCHS: 300
+  LR: 0.05
+  SCHEDULER:
+    TYPE: "ExponentialLR"
+    GAMMA: 0.99
+    MIN_LR: 0.0001
+

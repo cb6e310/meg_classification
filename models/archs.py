@@ -211,7 +211,7 @@ class SimCLR(BaseNet):
         )
         self.backbone.fc = nn.Identity()
 
-        self.criterion = SupConLoss(cfg)
+        self.criterion = InfoNCE(cfg)
         # self.criterion = contrastive_loss(cfg)
 
         # self.fc = nn.Linear(projection_dim, num_classes)
@@ -224,14 +224,15 @@ class SimCLR(BaseNet):
         z_j = F.normalize(self.projection_head(h_j), dim=-1)
         # logger.debug(z_i.shape)
 
-        loss = self.compute_loss(z_i, z_j)
+        # loss = self.compute_loss(z_i, z_j)
 
-        return h_i, h_j, z_i, z_j, loss
+        return h_i, h_j, z_i, z_j 
 
+class SimSiam(BaseNet):
+    def __init__(self, cfg):
+        super(SimSiam, self).__init__(cfg)
+        input_channels = cfg.DATASET.CHANNELS
+        num_classes = cfg.DATASET.NUM_CLASSES
 
-    def compute_loss(self, x_i, x_j):
-        x_i = torch.unsqueeze(x_i, 1)
-        x_j = torch.unsqueeze(x_j, 1)
-        features = torch.concatenate([x_i, x_j], axis=1)
-        # logger.debug(features.shape)
-        return self.criterion(features)
+        backbone_name = cfg.MODEL.ARGS.BACKBONE
+

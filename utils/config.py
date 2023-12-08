@@ -43,13 +43,13 @@ CFG.EXPERIMENT.SEED = (
 )  # Random number seed, which is beneficial to the repeatability of the experiment.
 CFG.EXPERIMENT.TASK = "train"  # train, test, pretext
 CFG.EXPERIMENT.DEBUG = False  # Debug mode
-CFG.EXPERIMENT.GPU_IDS = "0"  # List of GPUs used
-CFG.EXPERIMENT.WORLD_SIZE = 1  # Number of GPUs used
+CFG.EXPERIMENT.GPU_IDS = "0, 1"  # List of GPUs used
+CFG.EXPERIMENT.WORLD_SIZE = 2  # Number of GPUs used
 CFG.EXPERIMENT.REPETITION_NUM = 5  # Number of repetition times
 CFG.EXPERIMENT.RESUME = False  # Resume training
 CFG.EXPERIMENT.CHECKPOINT = "" # 'Log_2020-03-19_19-53-27'
 CFG.EXPERIMENT.CHKP_IDX = None  # Choose index of checkpoint to start from. If None, uses the latest chkp
-CFG.EXPERIMENT.CHECKPOINT_GAP = 10
+CFG.EXPERIMENT.CHECKPOINT_GAP = 50
 
 # Dataset
 CFG.DATASET = CN()
@@ -66,6 +66,7 @@ CFG.DATASET.TEST.BATCH_SIZE = 1024
 CFG.MODEL = CN()
 CFG.MODEL.TYPE = ""
 CFG.MODEL.ARGS = CN(new_allowed=True)
+CFG.MODEL.CRITERION = CN(new_allowed=True)
 
 # Solver
 CFG.SOLVER = CN()
@@ -78,11 +79,12 @@ CFG.SOLVER.LR = 0.003
 CFG.SOLVER.WEIGHT_DECAY = 0.0005
 CFG.SOLVER.MOMENTUM = 0.9
 CFG.SOLVER.TYPE = "SGD"
+CFG.SOLVER.SCHEDULER = CN(new_allowed=True)
 
 # Log
 CFG.LOG = CN()
 # CFG.LOG.SAVE_CHECKPOINT_FREQ = 20
-CFG.LOG.PREFIX = "./results"
+CFG.LOG.PREFIX = "/home/song/code/current/meg_classification/ssl/results/"
 
 
 

@@ -19,18 +19,23 @@ from utils.config import (
     save_cfg,
 )
 
+from loguru import logger
+
 from utils.validate import validate
 
 
 class BaseTrainer:
-    def __init__(self, experiment_name, model, train_loader, val_loader, cfg):
+    def __init__(self, experiment_name, model, criterion, train_loader, val_loader, cfg):
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.criterion = criterion
         self.model = model
         self.optimizer = self.init_optimizer(cfg)
+        self.scheduler = self.init_scheduler(cfg)
         self.best_acc = -1
         self.best_epoch = 0
+        self.resume_epoch = -1
 
         username = getpass.getuser()
         # init loggers
@@ -43,6 +48,7 @@ class BaseTrainer:
 
         if not cfg.EXPERIMENT.RESUME:
             save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
+            os.mkdir(os.path.join(self.log_path, "checkpoints"))
 
         # Choose here if you want to start training from a previous snapshot (None for new training)
         if cfg.EXPERIMENT.RESUME:
@@ -60,12 +66,20 @@ class BaseTrainer:
                 chosen_chkp = os.path.join(
                     "results", cfg.EXPERIMENT.CHECKPOINT, "checkpoints", chosen_chkp
                 )
+
                 print(log_msg("Loading model from {}".format(chosen_chkp), "INFO"))
                 print(
                     log_msg("Current epoch: {}".format(cfg.EXPERIMENT.CHKP_IDX), "INFO")
                 )
+
                 self.chkp = torch.load(chosen_chkp)
                 self.model.load_state_dict(self.chkp["model_state_dict"])
+                self.optimizer.load_state_dict(self.chkp["optimizer"])
+                self.scheduler.load_state_dict(self.chkp["scheduler"])
+                self.best_acc = self.chkp["best_acc"]
+                self.best_epoch = self.chkp["epoch"]
+                self.resume_epoch = self.chkp["epoch"]
+
                 if self.chkp["dataset"] != cfg.DATASET.TYPE:
                     print(
                         log_msg(
@@ -109,6 +123,28 @@ class BaseTrainer:
             raise NotImplementedError(cfg.SOLVER.TYPE)
         return optimizer
 
+    def init_scheduler(self, cfg):
+        # check optimizer
+        assert self.optimizer is not None
+
+        if cfg.SOLVER.SCHEDULER.TYPE == "step":
+            scheduler = optim.lr_scheduler.StepLR(
+                self.optimizer,
+                step_size=cfg.SOLVER.SCHEDULER.STEP_SIZE,
+                gamma=cfg.SOLVER.SCHEDULER.GAMMA,
+            )
+        elif cfg.SOLVER.SCHEDULER.TYPE == "cosine":
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, T_max=cfg.SOLVER.EPOCHS
+            )
+        elif cfg.SOLVER.SCHEDULER.TYPE == "ExponentialLR":
+            scheduler = optim.lr_scheduler.ExponentialLR(
+                self.optimizer, gamma=cfg.SOLVER.SCHEDULER.GAMMA
+            )
+        else:
+            raise NotImplementedError(cfg.SOLVER.SCHEDULER.TYPE)
+        return scheduler
+
     def log(self, epoch, log_dict):
         if not self.cfg.EXPERIMENT.DEBUG:
             import wandb
@@ -136,11 +172,13 @@ class BaseTrainer:
 
     def train(self, repetition_id=0):
         epoch = 0
-        if self.cfg.EXPERIMENT.RESUME and self.cfg.EXPERIMENT.CHECKPOINT != "":
-            epoch = state["epoch"] + 1
-            self.distiller.load_state_dict(state["model"])
-            self.optimizer.load_state_dict(state["optimizer"])
-            self.best_acc = state["best_acc"]
+        if self.resume_epoch != -1:
+            epoch = self.resume_epoch + 1
+        # if self.cfg.EXPERIMENT.RESUME and self.cfg.EXPERIMENT.CHECKPOINT != "":
+        #     epoch = state["epoch"] + 1
+        #     self.distiller.load_state_dict(state["model"])
+        #     self.optimizer.load_state_dict(state["optimizer"])
+        #     self.best_acc = state["best_acc"]
         while epoch < self.cfg.SOLVER.EPOCHS:
             self.train_epoch(epoch, repetition_id=repetition_id)
             epoch += 1
@@ -178,6 +216,13 @@ class BaseTrainer:
             msg = self.train_iter(data, epoch, train_meters, idx)
             pbar.set_description(log_msg(msg, "TRAIN"))
             pbar.update()
+
+        # update lr
+        # get current lr
+        lr = self.optimizer.param_groups[0]["lr"]
+        if lr > self.cfg.SOLVER.SCHEDULER.MIN_LR:
+            self.scheduler.step()
+
         pbar.close()
 
         # validate
@@ -204,11 +249,13 @@ class BaseTrainer:
             "model_state_dict": self.model.state_dict(),
             "model": self.cfg.MODEL.TYPE,
             "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.scheduler.state_dict(),
             "best_acc": self.best_acc,
             "dataset": self.cfg.DATASET.TYPE,
         }
 
-        if epoch + 1 % self.cfg.EXPERIMENT.CHECKPOINT_GAP== 0:
+        if (epoch + 1) % self.cfg.EXPERIMENT.CHECKPOINT_GAP == 0:
+            logger.info("Saving checkpoint to {}".format(self.log_path))
             chkp_path = os.path.join(
                 self.log_path,
                 "checkpoints",
@@ -216,11 +263,15 @@ class BaseTrainer:
             )
             torch.save(state, chkp_path)
 
-        if test_acc >= self.best_acc:
-            chkp_path = os.path.join(
-                self.log_path, "state_best_{}".format(repetition_id)
-            )
-            torch.save(state, chkp_path)
+        # save best checkpoint with loss or accuracy
+        if self.cfg.EXPERIMENT.TASK != "pretext":
+            if test_acc > self.best_acc:
+                chkp_path = os.path.join(
+                    self.log_path,
+                    "checkpoints",
+                    "epoch_best_{}_chkp.tar".format(repetition_id),
+                )
+                torch.save(state, chkp_path)
 
     def train_iter(self, data, epoch, train_meters, data_itx: int = 0):
         self.optimizer.zero_grad()
@@ -234,11 +285,12 @@ class BaseTrainer:
             x_i = x_i.cuda(non_blocking=True)
             x_j = x_j.cuda(non_blocking=True)
             batch_size = x_i.size(0)
-            
+
             # forward
-            _, _, _, _, loss = self.model(x_i, x_j)
+            _, _, z_i, z_j = self.model(x_i, x_j)
+            loss = self.criterion(z_i, z_j)
             loss = loss.mean()
-            print(loss)
+            # print(loss)
         else:
             data, target = data
             data = data.float()
@@ -259,19 +311,21 @@ class BaseTrainer:
         if not self.cfg.EXPERIMENT.TASK == "pretext":
             acc1, _ = accuracy(preds, target, topk=(1, 2))
             train_meters["top1"].update(acc1[0], batch_size)
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}".format(
+            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}|lr:{:.6f}".format(
                 epoch,
                 # train_meters["data_time"].avg,
                 train_meters["training_time"].avg,
                 train_meters["losses"].avg,
                 train_meters["top1"].avg,
+                self.optimizer.param_groups[0]["lr"],
             )
         # print info
         else:
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}".format(
+            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|lr:{:.6f}".format(
                 epoch,
                 # train_meters["data_time"].avg,
                 train_meters["training_time"].avg,
                 train_meters["losses"].avg,
+                self.optimizer.param_groups[0]["lr"],
             )
         return msg
