@@ -9,6 +9,7 @@ model_dict = {
     "VARCNN": (VARCNN, ""),
     "TimeNet": (TimeNet, ""),
     "SimCLR": (SimCLR, ""),
+    "LinearClassifier": (LinearClassifier, ""),
 }
 
 criterion_dict = {

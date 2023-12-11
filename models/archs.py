@@ -220,6 +220,7 @@ class SimCLR(BaseNet):
         h_i = self.backbone(x_i)
         h_j = self.backbone(x_j)
 
+
         z_i = F.normalize(self.projection_head(h_i), dim=-1)
         z_j = F.normalize(self.projection_head(h_j), dim=-1)
         # logger.debug(z_i.shape)
@@ -236,3 +237,13 @@ class SimSiam(BaseNet):
 
         backbone_name = cfg.MODEL.ARGS.BACKBONE
 
+
+class LinearClassifier(nn.Module):
+    def __init__(self, cfg):
+        super(LinearClassifier, self).__init__()
+        n_features = cfg.MODEL.ARGS.N_FEATURES
+        n_classes = cfg.DATASET.NUM_CLASSES
+        self.model = nn.Linear(n_features, n_classes)
+
+    def forward(self, x):
+        return self.model(x)
