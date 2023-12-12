@@ -5,11 +5,6 @@ import torchvision
 import torchvision.transforms as transforms
 import numpy as np
 
-from simclr import SimCLR
-from simclr.modules import LogisticRegression, get_resnet
-from simclr.modules.transformations import TransformsSimCLR
-
-from utils import yaml_config_hook
 
 import os
 import time
@@ -52,7 +47,7 @@ class LinearEvalTrainer:
         self.resume_epoch = -1
 
         # creating features from pretext model
-        train_x, train_y, test_x, test_y = self.get_features(
+        self.train_feat_loader, self.val_feat_loader = self.get_features(
             self.model, train_loader, val_loader
         )
 
@@ -127,14 +122,14 @@ class LinearEvalTrainer:
     def init_optimizer(self, cfg):
         if cfg.SOLVER.TYPE == "SGD":
             optimizer = optim.SGD(
-                self.model.parameters(),
+                self.classifier.parameters(),
                 lr=cfg.SOLVER.LR,
                 momentum=cfg.SOLVER.MOMENTUM,
                 weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             )
         elif cfg.SOLVER.TYPE == "Adam":
             optimizer = optim.Adam(
-                self.model.module.get_learnable_parameters(),
+                self.classifier.module.get_learnable_parameters(),
                 lr=cfg.SOLVER.LR,
                 weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             )
@@ -167,6 +162,7 @@ class LinearEvalTrainer:
     def log(self, epoch, log_dict):
         if not self.cfg.EXPERIMENT.DEBUG:
             import wandb
+
             # wandb.log({"current lr": lr})
             wandb.log(log_dict)
         if log_dict["test_acc"] > self.best_acc:
@@ -191,8 +187,10 @@ class LinearEvalTrainer:
     def _inference(self, loader):
         feature_vector = []
         labels_vector = []
-        for step, (x, y) in enumerate(loader):
+        for step, data in enumerate(loader):
+            x, y, _, _, _ = data
             x = x.cuda(non_blocking=True)
+            x = x.float()
             # get encoding
             with torch.no_grad():
                 h, _, z, _ = self.model(x, x)
@@ -211,24 +209,21 @@ class LinearEvalTrainer:
         return feature_vector, labels_vector
 
     def get_features(self, encoder, train_loader, test_loader):
-        train_X, train_y = self._inference(train_loader, encoder)
-        test_X, test_y = self._inference(test_loader, encoder)
-        return train_X, train_y, test_X, test_y
-
-    def create_data_loaders_from_arrays(
-        self, X_train, y_train, X_test, y_test, batch_size
-    ):
+        batch_size = self.cfg.SOLVER.BATCH_SIZE
+        train_X, train_y = self._inference(train_loader)
+        test_X, test_y = self._inference(test_loader)
         train = torch.utils.data.TensorDataset(
-            torch.from_numpy(X_train), torch.from_numpy(y_train)
+            torch.from_numpy(train_X), torch.from_numpy(train_y)
         )
-        
+
         train_loader = torch.utils.data.DataLoader(
             train, batch_size=batch_size, shuffle=False
         )
 
         test = torch.utils.data.TensorDataset(
-            torch.from_numpy(X_test), torch.from_numpy(y_test)
+            torch.from_numpy(test_X), torch.from_numpy(test_y)
         )
+
         test_loader = torch.utils.data.DataLoader(
             test, batch_size=batch_size, shuffle=False
         )
@@ -238,7 +233,7 @@ class LinearEvalTrainer:
         epoch = 0
         if self.resume_epoch != -1:
             epoch = self.resume_epoch + 1
-            
+
         while epoch < self.cfg.SOLVER.EPOCHS:
             self.train_epoch(epoch, repetition_id=repetition_id)
             epoch += 1
@@ -267,12 +262,12 @@ class LinearEvalTrainer:
             "losses": AverageMeter(),
             "top1": AverageMeter(),
         }
-        num_iter = len(self.train_loader)
+        num_iter = len(self.train_feat_loader)
         pbar = tqdm(range(num_iter))
 
         # train loops
         self.classifier.train()
-        for idx, data in enumerate(self.train_loader):
+        for idx, data in enumerate(self.train_feat_loader):
             msg = self.train_iter(data, epoch, train_meters, idx)
             pbar.set_description(log_msg(msg, "TRAIN"))
             pbar.update()
@@ -289,7 +284,7 @@ class LinearEvalTrainer:
         if self.cfg.EXPERIMENT.TASK == "pretext":
             test_acc, test_loss = 0, 0
         else:
-            test_acc, test_loss = validate(self.val_loader, self.model)
+            test_acc, test_loss = self.validate()
 
         # log
         log_dict = OrderedDict(
@@ -338,29 +333,17 @@ class LinearEvalTrainer:
         train_start_time = time.time()
 
         # train_meters["data_time"].update(time.time() - train_start_time)
-        if self.cfg.MODEL.ARGS.SIAMESE:
-            _, _, x_i, x_j, _ = data
-            x_i = x_i.float()
-            x_j = x_j.float()
-            x_i = x_i.cuda(non_blocking=True)
-            x_j = x_j.cuda(non_blocking=True)
-            batch_size = x_i.size(0)
+        data, target = data
+        data = data.float()
+        data = data.cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
+        batch_size = data.size(0)
 
-            # forward
-            _, _, z_i, z_j = self.model(x_i, x_j)
-            loss = self.criterion(z_i, z_j)
-            loss = loss.mean()
-            # print(loss)
-        else:
-            data, target = data
-            data = data.float()
-            data = data.cuda(non_blocking=True)
-            target = target.cuda(non_blocking=True)
-            batch_size = data.size(0)
-
-            # forward
-            preds, loss = self.model(data, target)
-            loss = loss.mean()
+        # forward
+        preds = self.classifier(data)
+        # logger.debug(self.classifier.training)
+        loss = self.criterion(preds, target)
+        loss = loss.mean()
 
         # backward
         loss.backward()
@@ -368,54 +351,45 @@ class LinearEvalTrainer:
 
         train_meters["training_time"].update(time.time() - train_start_time)
         train_meters["losses"].update(loss.cpu().detach().numpy().mean(), batch_size)
-        if not self.cfg.EXPERIMENT.TASK == "pretext":
-            acc1, _ = accuracy(preds, target, topk=(1, 2))
-            train_meters["top1"].update(acc1[0], batch_size)
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}|lr:{:.6f}".format(
-                epoch,
-                # train_meters["data_time"].avg,
-                train_meters["training_time"].avg,
-                train_meters["losses"].avg,
-                train_meters["top1"].avg,
-                self.optimizer.param_groups[0]["lr"],
-            )
-        # print info
-        else:
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|lr:{:.6f}".format(
-                epoch,
-                # train_meters["data_time"].avg,
-                train_meters["training_time"].avg,
-                train_meters["losses"].avg,
-                self.optimizer.param_groups[0]["lr"],
-            )
+        acc1, _ = accuracy(preds, target, topk=(1, 2))
+        train_meters["top1"].update(acc1[0], batch_size)
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}|lr:{:.6f}".format(
+            epoch,
+            # train_meters["data_time"].avg,
+            train_meters["training_time"].avg,
+            train_meters["losses"].avg,
+            train_meters["top1"].avg,
+            self.optimizer.param_groups[0]["lr"],
+        )
         return msg
 
-    def validate(self, ):
+    def validate(self):
         batch_time, losses, top1 = [AverageMeter() for _ in range(3)]
-        num_iter = len(self.val_loader)
+        num_iter = len(self.val_feat_loader)
         pbar = tqdm(range(num_iter))
 
         self.classifier.eval()
-        with torch.no_grad():
-            start_time = time.time()
-            for idx, (data, target) in enumerate(self.val_loader):
-                data = data.float()
-                data = data.cuda(non_blocking=True)
-                target = target.cuda(non_blocking=True)
-                output, loss = self.model(data, target)
-                loss = loss.mean()
-                acc1, _ = accuracy(output, target, topk=(1, 2))
-                batch_size = data.size(0)
-                losses.update(loss.cpu().detach().numpy().mean(), batch_size)
-                top1.update(acc1[0], batch_size)
+        start_time = time.time()
+        for idx, (data, target) in enumerate(self.val_feat_loader):
+            data = data.float()
+            data = data.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+            preds = self.classifier(data)
+            loss = self.criterion(preds, target)
+            loss = loss.mean()
+            acc1, _ = accuracy(preds, target, topk=(1, 2))
+            batch_size = data.size(0)
+            losses.update(loss.cpu().detach().numpy().mean(), batch_size)
+            top1.update(acc1[0], batch_size)
 
-                # measure elapsed time
-                batch_time.update(time.time() - start_time)
-                start_time = time.time()
-                msg = "Loss:{loss:.4f}| Top-1:{top1:.4f}".format(
-                    loss=losses.avg, top1=top1.avg
-                )
-                pbar.set_description(log_msg(msg, "EVAL"))
-                pbar.update()
+            # measure elapsed time
+            batch_time.update(time.time() - start_time)
+            start_time = time.time()
+            msg = "Loss:{loss:.4f}| Top-1:{top1:.4f}".format(
+                loss=losses.avg, top1=top1.avg
+            )
+            pbar.set_description(log_msg(msg, "EVAL"))
+            pbar.update()
         pbar.close()
+        self.classifier.train()
         return top1.avg, losses.avg

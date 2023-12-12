@@ -7,9 +7,9 @@ import torchvision.models as models
 from loguru import logger
 
 backbone_dict = {
-    "resnet18": models.resnet18,
-    "resnet34": models.resnet34,
-    "resnet50": models.resnet50,
+    "resnet18": [models.resnet18, 512],
+    "resnet34": [models.resnet34, 512],
+    "resnet50": [models.resnet50, 2048]
 }
 
 class BaseNet(nn.Module):
@@ -199,7 +199,8 @@ class SimCLR(BaseNet):
         backbone_name = cfg.MODEL.ARGS.BACKBONE
         projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
 
-        self.backbone = backbone_dict[backbone_name](pretrained=False)
+        self.backbone = backbone_dict[backbone_name][0](pretrained=False)
+        self.feature_dim = backbone_dict[backbone_name][1]
         self.backbone.conv1 = nn.Conv2d(
             input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
         )

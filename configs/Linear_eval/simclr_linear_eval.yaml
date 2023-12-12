@@ -1,7 +1,7 @@
 EXPERIMENT:
   NAME: "simclr_linear_eval"
   TAG: "baselines"
-  PROJECT: "baseline project"
+  PROJECT: "debug project"
   DEBUG: True 
   REPETITION_NUM: 5 # Number of repetition times
   TASK: "train"
@@ -22,21 +22,19 @@ MODEL:
     BACKBONE: "resnet50"
     TEMPERATURE: 0.5
     SIAMESE: True
-    N_FEATURES: 128 # backbone output feature dimension
+    N_FEATURES: 2048 # backbone output feature dimension
     PROJECTION_DIM: 128
     CLASSIFIER: "LinearClassifier"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_2023-12-08_05-38-32/checkpoints/epoch_299_0_chkp.tar"
 
     # SOURCE_CHANNELS: 36
   CRITERION:
-    TYPE: "InfoNCE"
-    ARGS:
-      TEMPERATURE: 0.5
-      # SOURCE_CHANNELS: 36
+    TYPE: "CE"
 SOLVER:
   BATCH_SIZE: 512
   EPOCHS: 400
-  LR: 0.05
+  LR: 0.5
   SCHEDULER:
     TYPE: "ExponentialLR"
-    GAMMA: 0.98
-    MIN_LR: 0.0001
+    GAMMA: 0.99
+    MIN_LR: 0.001

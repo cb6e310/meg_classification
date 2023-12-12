@@ -6,6 +6,16 @@ from .blocks import *
 # import some common builtin loss
 from torch.nn import CrossEntropyLoss, MSELoss
 
+from loguru import logger
+
+class CrossEntropyLoss(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, logits, labels):
+        # logger.info(f"Logits shape: {logits.shape}, Labels shape: {labels.shape}")
+        return self.criterion(logits, labels)
 
 class NT_Xent(nn.Module):
     def __init__(self, cfg):

@@ -80,13 +80,24 @@ if __name__ == "__main__":
         if cfg.EXPERIMENT.WORLD_SIZE > 1:
             encoder = torch.nn.DataParallel(encoder)
 
+        pretrained_dict = torch.load(cfg.MODEL.ARGS.PRETRAINED_PATH)
+
+        encoder.load_state_dict(pretrained_dict["model_state_dict"])
+
+        print(
+            "Loaded pretrained model from {}".format(cfg.MODEL.ARGS.PRETRAINED_PATH),
+            "pretrained epoch: {}".format(pretrained_dict["epoch"]),
+        )
+
+        encoder.eval()
+
         classifier = model_dict[cfg.MODEL.ARGS.CLASSIFIER][0](cfg).cuda()
 
         criterion = criterion_dict[cfg.MODEL.CRITERION.TYPE](cfg).cuda()
 
         # train
         trainer = trainer_dict["linear_eval"](
-            experiment_name, model, classifier, criterion, train_loader, val_loader, cfg
+            experiment_name, encoder, classifier, criterion, train_loader, val_loader, cfg
         )
         best_acc = trainer.train(repetition_id=repetition_id)
         best_acc_l.append(float(best_acc))

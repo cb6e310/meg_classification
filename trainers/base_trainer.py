@@ -251,6 +251,7 @@ class BaseTrainer:
             "optimizer": self.optimizer.state_dict(),
             "scheduler": self.scheduler.state_dict(),
             "best_acc": self.best_acc,
+            "loss": train_meters["losses"].avg,
             "dataset": self.cfg.DATASET.TYPE,
         }
 
