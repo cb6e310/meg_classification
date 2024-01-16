@@ -85,7 +85,8 @@ class BYOLTrainer:
                 )
 
                 self.chkp = torch.load(chosen_chkp)
-                self.model.load_state_dict(self.chkp["model_state_dict"])
+                self.model.online_network.load_state_dict(self.chkp["online_network_state_dict"])
+                self.model.target_network.load_state_dict(self.chkp["target_network_state_dict"])
                 self.optimizer.load_state_dict(self.chkp["optimizer"])
                 self.scheduler.load_state_dict(self.chkp["scheduler"])
                 self.best_acc = self.chkp["best_acc"]
@@ -211,7 +212,8 @@ class BYOLTrainer:
 
         state = {
             "epoch": epoch,
-            "model_state_dict": self.model.state_dict(),
+            "online_network_state_dict": self.model.online_network.state_dict(),
+            "target_network_state_dict": self.model.target_network.state_dict(),
             "model": self.cfg.MODEL.TYPE,
             "optimizer": self.optimizer.state_dict(),
             "scheduler": self.scheduler.state_dict(),
@@ -254,7 +256,7 @@ class BYOLTrainer:
 
             # forward
             p_1, p_2, z_1, z_2 = self.model(x_i, x_j)
-            loss = self.criterion(z_1, z_2) + self.criterion(p_1, p_2)
+            loss = self.criterion(z_1, p_1) + self.criterion(z_2, p_2)
             loss = loss.mean()
             # print(loss)
         else:
@@ -271,6 +273,8 @@ class BYOLTrainer:
         # backward
         loss.backward()
         self.optimizer.step()
+
+        self._update_target_network_parameters()  # update the key encoder
 
         train_meters["training_time"].update(time.time() - train_start_time)
         train_meters["losses"].update(loss.cpu().detach().numpy().mean(), batch_size)
