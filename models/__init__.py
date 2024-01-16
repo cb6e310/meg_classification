@@ -10,6 +10,7 @@ model_dict = {
     "TimeNet": (TimeNet, ""),
     "SimCLR": (SimCLR, ""),
     "LinearClassifier": (LinearClassifier, ""),
+    "BYOL": (BYOL, ""),
 }
 
 criterion_dict = {

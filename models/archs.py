@@ -9,8 +9,9 @@ from loguru import logger
 backbone_dict = {
     "resnet18": [models.resnet18, 512],
     "resnet34": [models.resnet34, 512],
-    "resnet50": [models.resnet50, 2048]
+    "resnet50": [models.resnet50, 2048],
 }
+
 
 class BaseNet(nn.Module):
     def __init__(self, cfg):
@@ -200,7 +201,6 @@ class SimCLR(BaseNet):
         projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
 
         self.backbone = backbone_dict[backbone_name][0](pretrained=False)
-        self.feature_dim = backbone_dict[backbone_name][1]
         self.backbone.conv1 = nn.Conv2d(
             input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
         )
@@ -212,7 +212,6 @@ class SimCLR(BaseNet):
         )
         self.backbone.fc = nn.Identity()
 
-        self.criterion = InfoNCE(cfg)
         # self.criterion = contrastive_loss(cfg)
 
         # self.fc = nn.Linear(projection_dim, num_classes)
@@ -221,14 +220,14 @@ class SimCLR(BaseNet):
         h_i = self.backbone(x_i)
         h_j = self.backbone(x_j)
 
-
         z_i = F.normalize(self.projection_head(h_i), dim=-1)
         z_j = F.normalize(self.projection_head(h_j), dim=-1)
         # logger.debug(z_i.shape)
 
         # loss = self.compute_loss(z_i, z_j)
 
-        return h_i, h_j, z_i, z_j 
+        return h_i, h_j, z_i, z_j
+
 
 class SimSiam(BaseNet):
     def __init__(self, cfg):
@@ -238,6 +237,48 @@ class SimSiam(BaseNet):
 
         backbone_name = cfg.MODEL.ARGS.BACKBONE
 
+
+class BYOL(BaseNet):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        input_channels = cfg.DATASET.CHANNELS
+        num_classes = cfg.DATASET.NUM_CLASSES
+
+        backbone_name = cfg.MODEL.ARGS.BACKBONE
+        projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+
+        self.target_network= backbone_dict[backbone_name][0](pretrained=False)
+        self.online_network= backbone_dict[backbone_name][0](pretrained=False)
+
+        self.target_network.conv1 = nn.Conv2d(
+            input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+        )
+        self.online_network.conv1 = nn.Conv2d(
+            input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+        )
+
+        projection_input_dim = self.online_network.fc.in_features
+        self.projection_head = nn.Sequential(
+            nn.Linear(projection_input_dim, projection_input_dim),
+            nn.ReLU(),
+            nn.Linear(projection_input_dim, projection_dim),
+        )
+
+        self.target_network.fc = nn.Identity()
+        self.online_network.fc = nn.Identity()
+
+    def forward(self, batch_view_1, batch_view_2):
+        # compute query feature
+        predictions_from_view_1 = self.projection_head(self.online_network(batch_view_1))
+        predictions_from_view_2 = self.projection_head(self.online_network(batch_view_2))
+
+        # compute key features
+        with torch.no_grad():
+            target_predictions_from_view_1 = self.projection_head(self.target_network(batch_view_1))
+            target_predictions_from_view_2 = self.projection_head(self.target_network(batch_view_2))
+
+        return predictions_from_view_1, predictions_from_view_2, target_predictions_from_view_1, target_predictions_from_view_2
+        
 
 class LinearClassifier(nn.Module):
     def __init__(self, cfg):

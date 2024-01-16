@@ -11,4 +11,4 @@
 ```bash
 PYTHONPATH=./ python scripts/train.py --cfg configs/debug/debug.yaml
 ```
-- change cfg: EXPERIMENT>PROJECT. and nam
+- change cfg: EXPERIMENT>PROJECT. and name
