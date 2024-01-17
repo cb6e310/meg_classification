@@ -137,22 +137,32 @@ class NetWrapper(nn.Module):
 class BYOL(nn.Module):
     def __init__(
         self,
-        net,
-        image_size,
-        hidden_layer=-2,
-        projection_size=256,
-        projection_hidden_size=4096,
-        moving_average_decay=0.99,
-        use_momentum=True,
-        sync_batchnorm=None,
+        cfg,
+        # net,
+        # feature_size,
+        # projection_size=256,
+        # projection_hidden_size=4096,
+        # moving_average_decay=0.99,
+        # use_momentum=True,
+        # sync_batchnorm=None,
     ):
         super().__init__()
-        self.net = net
+        self.net = backbone_dict[cfg.MODEL.ARGS.BACKBONE][0](pretrained=False)
+        feature_size = cfg.DATASET.POINTS
+        channels = cfg.DATASET.CHANNELS
+        hidden_layer=-2
+        projection_size = cfg.MODEL.ARGS.PROJECTION_DIM
+        projection_hidden_size = cfg.MODEL.ARGS.PROJECTION_HIDDEN_SIZE
+        moving_average_decay = cfg.MODEL.ARGS.TAU_BASE
+        use_momentum = cfg.MODEL.ARGS.USE_MOMENTUM
+        sync_batchnorm = None
 
-        # default SimCLR augmentation
+        self.net.conv1 = nn.Conv2d(
+            channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+        )
 
         self.online_encoder = NetWrapper(
-            net,
+            self.net,
             projection_size,
             projection_hidden_size,
             layer=hidden_layer,
@@ -169,11 +179,11 @@ class BYOL(nn.Module):
         )
 
         # get device of network and make wrapper same device
-        device = get_module_device(net)
+        device = get_module_device(self.net)
         self.to(device)
 
         # send a mock image tensor to instantiate singleton parameters
-        self.forward(torch.randn(2, 3, image_size, image_size, device=device))
+        self.forward(torch.randn(2, channels, feature_size, 1, device=device))
 
     @singleton("target_encoder")
     def _get_target_encoder(self):
@@ -221,11 +231,12 @@ class BYOL(nn.Module):
 
             target_proj_one, target_proj_two = target_projections.chunk(2, dim=0)
 
-        loss_one = loss_fn(online_pred_one, target_proj_two.detach())
-        loss_two = loss_fn(online_pred_two, target_proj_one.detach())
-
-        loss = loss_one + loss_two
-        return loss.mean()
+        return (
+            online_pred_one,
+            online_pred_two,
+            target_proj_one,
+            target_proj_two,
+        )
 
 
 class BaseNet(nn.Module):

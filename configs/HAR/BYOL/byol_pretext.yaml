@@ -21,6 +21,8 @@ MODEL:
   ARGS:
     BACKBONE: "resnet50"
     SIAMESE: True
+    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    
     PROJECTION_DIM: 256
     PROJECTION_HIDDEN_SIZE: 4096
     TAU_BASE: 0.996

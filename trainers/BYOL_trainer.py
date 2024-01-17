@@ -86,12 +86,7 @@ class BYOLTrainer:
                 )
 
                 self.chkp = torch.load(chosen_chkp)
-                self.model.online_network.load_state_dict(
-                    self.chkp["online_network_state_dict"]
-                )
-                self.model.target_network.load_state_dict(
-                    self.chkp["target_network_state_dict"]
-                )
+                self.model.load_state_dict(self.chkp["model_state_dict"])
                 self.optimizer.load_state_dict(self.chkp["optimizer"])
                 self.scheduler.load_state_dict(self.chkp["scheduler"])
                 self.best_acc = self.chkp["best_acc"]
@@ -182,48 +177,12 @@ class BYOLTrainer:
             lines.append(os.linesep)
             writer.writelines(lines)
 
-    def __l1_regularization__(self, l1_penalty=3e-4):
-        regularization_loss = 0
-        for param in self.distiller.module.get_learnable_parameters():
-            regularization_loss += torch.sum(abs(param))  # torch.norm(param, p=1)
-        return l1_penalty * regularization_loss
-
-    @torch.no_grad()
-    def _update_target_network_parameters(self):
-        """
-        Momentum update of the key encoder
-        """
-        # self.m = (
-        #     1
-        #     - (1 - self.tau_base)
-        #     * np.cos(np.pi * self.current_epoch / self.cfg.SOLVER.EPOCHS + 1)
-        #     / 2
-        # )
-        # logger.debug("m:{}".format(self.m))
-        for param_q, param_k in zip(
-            self.model.online_network.parameters(), self.model.target_network.parameters()
-        ):
-            param_k.data = param_k.data * self.tau_base + param_q.data * (1.0 - self.tau_base)
-        # m = 1 − (1 − τbase) · (cos(πk/K) + 1)/2 with k the current training step and
-        # K the maximum number of training steps
-
-    def initializes_target_network(self):
-        # init momentum network as encoder net
-        for param_q, param_k in zip(
-            self.online_network.parameters(), self.target_network.parameters()
-        ):
-            param_k.data.copy_(param_q.data)  # initialize
-            param_k.requires_grad = False  # not update by gradient
-
     def train(self, repetition_id=0):
         self.current_epoch = 0
+
         if self.resume_epoch != -1:
             self.current_epoch = self.resume_epoch + 1
-        # if self.cfg.EXPERIMENT.RESUME and self.cfg.EXPERIMENT.CHECKPOINT != "":
-        #     epoch = state["epoch"] + 1
-        #     self.distiller.load_state_dict(state["model"])
-        #     self.optimizer.load_state_dict(state["optimizer"])
-        #     self.best_acc = state["best_acc"]
+
         while self.current_epoch < self.cfg.SOLVER.EPOCHS:
             self.train_epoch(self.current_epoch, repetition_id=repetition_id)
             self.current_epoch += 1
@@ -235,6 +194,7 @@ class BYOLTrainer:
                 "EVAL",
             )
         )
+
         with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
             writer.write(
                 "repetition_id:{}\tbest_acc:{:.4f}\tepoch:{}".format(
@@ -291,8 +251,7 @@ class BYOLTrainer:
 
         state = {
             "epoch": epoch,
-            "online_network_state_dict": self.model.online_network.state_dict(),
-            "target_network_state_dict": self.model.target_network.state_dict(),
+            "model_state_dict": self.model.state_dict(),
             "model": self.cfg.MODEL.TYPE,
             "optimizer": self.optimizer.state_dict(),
             "scheduler": self.scheduler.state_dict(),
@@ -325,57 +284,37 @@ class BYOLTrainer:
         train_start_time = time.time()
 
         # train_meters["data_time"].update(time.time() - train_start_time)
-        if self.cfg.MODEL.ARGS.SIAMESE:
-            _, _, x_i, x_j, _ = data
-            x_i = x_i.float()
-            x_j = x_j.float()
-            x_i = x_i.cuda(non_blocking=True)
-            x_j = x_j.cuda(non_blocking=True)
-            batch_size = x_i.size(0)
+        _, _, x_i, x_j, _ = data
+        x_i = x_i.float()
+        x_j = x_j.float()
+        x_i = x_i.cuda(non_blocking=True)
+        x_j = x_j.cuda(non_blocking=True)
+        batch_size = x_i.size(0)
 
-            # forward
-            p_1, p_2, z_1, z_2 = self.model(x_i, x_j)
-            loss = self.criterion(z_1, p_1) + self.criterion(z_2, p_2)
-            loss = loss.mean()
-            # print(loss)
-        else:
-            data, target = data
-            data = data.float()
-            data = data.cuda(non_blocking=True)
-            target = target.cuda(non_blocking=True)
-            batch_size = data.size(0)
-
-            # forward
-            preds, loss = self.model(data, target)
-            loss = loss.mean()
+        # forward
+        online_pred_one, online_pred_two, target_proj_one, target_proj_two = self.model(
+            x_i, x_j
+        )
+        loss = self.criterion(online_pred_one, target_proj_two) + self.criterion(
+            online_pred_two, target_proj_one
+        )
+        loss = loss.mean()
 
         # backward
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        self._update_target_network_parameters()  # update the key encoder
+        if self.model.use_momentum:
+            self.model.update_moving_average()
 
         train_meters["training_time"].update(time.time() - train_start_time)
         train_meters["losses"].update(loss.cpu().detach().numpy().mean(), batch_size)
-        if not self.cfg.EXPERIMENT.TASK == "pretext":
-            acc1, _ = accuracy(preds, target, topk=(1, 2))
-            train_meters["top1"].update(acc1[0], batch_size)
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}|lr:{:.6f}".format(
-                epoch,
-                # train_meters["data_time"].avg,
-                train_meters["training_time"].avg,
-                train_meters["losses"].avg,
-                train_meters["top1"].avg,
-                self.optimizer.param_groups[0]["lr"],
-            )
-        # print info
-        else:
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.7f}|lr:{:.6f}".format(
-                epoch,
-                # train_meters["data_time"].avg,
-                train_meters["training_time"].avg,
-                train_meters["losses"].avg,
-                self.optimizer.param_groups[0]["lr"],
-            )
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.7f}|lr:{:.6f}".format(
+            epoch,
+            # train_meters["data_time"].avg,
+            train_meters["training_time"].avg,
+            train_meters["losses"].avg,
+            self.optimizer.param_groups[0]["lr"],
+        )
         return msg
