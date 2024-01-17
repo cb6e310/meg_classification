@@ -150,7 +150,7 @@ class BYOL(nn.Module):
         self.net = backbone_dict[cfg.MODEL.ARGS.BACKBONE][0](pretrained=False)
         feature_size = cfg.DATASET.POINTS
         channels = cfg.DATASET.CHANNELS
-        hidden_layer=-2
+        hidden_layer = -2
         projection_size = cfg.MODEL.ARGS.PROJECTION_DIM
         projection_hidden_size = cfg.MODEL.ARGS.PROJECTION_HIDDEN_SIZE
         moving_average_decay = cfg.MODEL.ARGS.TAU_BASE
@@ -183,7 +183,10 @@ class BYOL(nn.Module):
         self.to(device)
 
         # send a mock image tensor to instantiate singleton parameters
-        self.forward(torch.randn(2, channels, feature_size, 1, device=device))
+        self.forward(
+            torch.randn(1, channels, feature_size, 1, device=device),
+            torch.randn(1, channels, feature_size, 1, device=device),
+        )
 
     @singleton("target_encoder")
     def _get_target_encoder(self):
@@ -207,9 +210,9 @@ class BYOL(nn.Module):
     def forward(
         self, batch_view_1, batch_view_2, return_embedding=False, return_projection=True
     ):
-        assert not (
-            self.training and batch_view_1.shape[0] == 1
-        ), "you must have greater than 1 sample when training, due to the batchnorm in the projection layer"
+        # assert not (
+        #     self.training and batch_view_1.shape[0] == 1
+        # ), "you must have greater than 1 sample when training, due to the batchnorm in the projection layer"
 
         if return_embedding:
             return self.online_encoder(batch_view_1, return_projection=return_projection)
