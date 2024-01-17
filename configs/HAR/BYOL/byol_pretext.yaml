@@ -1,8 +1,8 @@
 EXPERIMENT:
   NAME: "byol_pretext"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True
+  PROJECT: "baseline project"
+  DEBUG: False 
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training
@@ -22,7 +22,6 @@ MODEL:
     BACKBONE: "resnet50"
     SIAMESE: True
     USE_MOMENTUM: True  # True for BYOL, False for SimSiam
-    
     PROJECTION_DIM: 256
     PROJECTION_HIDDEN_SIZE: 4096
     TAU_BASE: 0.996
@@ -33,7 +32,7 @@ MODEL:
 SOLVER:
   TRAINER: "BYOL"
   BATCH_SIZE: 512
-  EPOCHS: 300
+  EPOCHS: 400
   LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"
