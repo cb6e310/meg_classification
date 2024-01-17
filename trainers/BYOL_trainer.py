@@ -5,16 +5,13 @@ from collections import OrderedDict
 
 import torch
 import torch.nn.functional as F
-import torchvision
+import torch.optim as optim
 from torch.utils.data.dataloader import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
 
-
-from utils import _create_model_training_folder
-
 import getpass
+
 from utils.helpers import (
     AverageMeter,
     accuracy,
@@ -41,6 +38,8 @@ class BYOLTrainer:
         self.criterion = criterion
         self.model = model
 
+        self.tau_base = cfg.MODEL.ARGS.TAU_BASE
+
         # check model name is BYOL
 
         self.optimizer = self.init_optimizer(cfg)
@@ -48,6 +47,8 @@ class BYOLTrainer:
         self.best_acc = -1
         self.best_epoch = 0
         self.resume_epoch = -1
+
+        self.current_epoch = 0
 
         username = getpass.getuser()
         # init loggers
@@ -85,8 +86,12 @@ class BYOLTrainer:
                 )
 
                 self.chkp = torch.load(chosen_chkp)
-                self.model.online_network.load_state_dict(self.chkp["online_network_state_dict"])
-                self.model.target_network.load_state_dict(self.chkp["target_network_state_dict"])
+                self.model.online_network.load_state_dict(
+                    self.chkp["online_network_state_dict"]
+                )
+                self.model.target_network.load_state_dict(
+                    self.chkp["target_network_state_dict"]
+                )
                 self.optimizer.load_state_dict(self.chkp["optimizer"])
                 self.scheduler.load_state_dict(self.chkp["scheduler"])
                 self.best_acc = self.chkp["best_acc"]
@@ -118,15 +123,89 @@ class BYOLTrainer:
             chosen_chkp = None
             print("Start from scratch.")
 
+    def init_optimizer(self, cfg):
+        if cfg.SOLVER.TYPE == "SGD":
+            optimizer = optim.SGD(
+                self.model.parameters(),
+                lr=cfg.SOLVER.LR,
+                momentum=cfg.SOLVER.MOMENTUM,
+                weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            )
+        elif cfg.SOLVER.TYPE == "Adam":
+            optimizer = optim.Adam(
+                self.model.module.get_learnable_parameters(),
+                lr=cfg.SOLVER.LR,
+                weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            )
+        else:
+            raise NotImplementedError(cfg.SOLVER.TYPE)
+        return optimizer
+
+    def init_scheduler(self, cfg):
+        # check optimizer
+        assert self.optimizer is not None
+
+        if cfg.SOLVER.SCHEDULER.TYPE == "step":
+            scheduler = optim.lr_scheduler.StepLR(
+                self.optimizer,
+                step_size=cfg.SOLVER.SCHEDULER.STEP_SIZE,
+                gamma=cfg.SOLVER.SCHEDULER.GAMMA,
+            )
+        elif cfg.SOLVER.SCHEDULER.TYPE == "cosine":
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, T_max=cfg.SOLVER.EPOCHS
+            )
+        elif cfg.SOLVER.SCHEDULER.TYPE == "ExponentialLR":
+            scheduler = optim.lr_scheduler.ExponentialLR(
+                self.optimizer, gamma=cfg.SOLVER.SCHEDULER.GAMMA
+            )
+        else:
+            raise NotImplementedError(cfg.SOLVER.SCHEDULER.TYPE)
+        return scheduler
+
+    def log(self, epoch, log_dict):
+        if not self.cfg.EXPERIMENT.DEBUG:
+            import wandb
+
+            # wandb.log({"current lr": lr})
+            wandb.log(log_dict)
+        if log_dict["test_acc"] > self.best_acc:
+            self.best_acc = log_dict["test_acc"]
+            self.best_epoch = epoch
+            if not self.cfg.EXPERIMENT.DEBUG:
+                wandb.run.summary["best_acc"] = self.best_acc
+        # worklog.txt
+        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
+            lines = ["epoch: {}\t".format(epoch)]
+            for k, v in log_dict.items():
+                lines.append("{}: {:.4f}\t".format(k, v))
+            lines.append(os.linesep)
+            writer.writelines(lines)
+
+    def __l1_regularization__(self, l1_penalty=3e-4):
+        regularization_loss = 0
+        for param in self.distiller.module.get_learnable_parameters():
+            regularization_loss += torch.sum(abs(param))  # torch.norm(param, p=1)
+        return l1_penalty * regularization_loss
+
     @torch.no_grad()
     def _update_target_network_parameters(self):
         """
         Momentum update of the key encoder
         """
+        # self.m = (
+        #     1
+        #     - (1 - self.tau_base)
+        #     * np.cos(np.pi * self.current_epoch / self.cfg.SOLVER.EPOCHS + 1)
+        #     / 2
+        # )
+        # logger.debug("m:{}".format(self.m))
         for param_q, param_k in zip(
             self.model.online_network.parameters(), self.model.target_network.parameters()
         ):
-            param_k.data = param_k.data * self.m + param_q.data * (1.0 - self.m)
+            param_k.data = param_k.data * self.tau_base + param_q.data * (1.0 - self.tau_base)
+        # m = 1 − (1 − τbase) · (cos(πk/K) + 1)/2 with k the current training step and
+        # K the maximum number of training steps
 
     def initializes_target_network(self):
         # init momentum network as encoder net
@@ -137,17 +216,17 @@ class BYOLTrainer:
             param_k.requires_grad = False  # not update by gradient
 
     def train(self, repetition_id=0):
-        epoch = 0
+        self.current_epoch = 0
         if self.resume_epoch != -1:
-            epoch = self.resume_epoch + 1
+            self.current_epoch = self.resume_epoch + 1
         # if self.cfg.EXPERIMENT.RESUME and self.cfg.EXPERIMENT.CHECKPOINT != "":
         #     epoch = state["epoch"] + 1
         #     self.distiller.load_state_dict(state["model"])
         #     self.optimizer.load_state_dict(state["optimizer"])
         #     self.best_acc = state["best_acc"]
-        while epoch < self.cfg.SOLVER.EPOCHS:
-            self.train_epoch(epoch, repetition_id=repetition_id)
-            epoch += 1
+        while self.current_epoch < self.cfg.SOLVER.EPOCHS:
+            self.train_epoch(self.current_epoch, repetition_id=repetition_id)
+            self.current_epoch += 1
         print(
             log_msg(
                 "repetition_id:{} Best accuracy:{} Epoch:{}".format(
@@ -271,6 +350,7 @@ class BYOLTrainer:
             loss = loss.mean()
 
         # backward
+        self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
@@ -291,7 +371,7 @@ class BYOLTrainer:
             )
         # print info
         else:
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|lr:{:.6f}".format(
+            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.7f}|lr:{:.6f}".format(
                 epoch,
                 # train_meters["data_time"].avg,
                 train_meters["training_time"].avg,

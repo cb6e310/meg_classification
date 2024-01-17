@@ -18,4 +18,5 @@ criterion_dict = {
     "NT_Xent": NT_Xent,
     "CE": CrossEntropyLoss,
     "InfoNCE": InfoNCE,
+    "RegressionLoss": RegressionLoss,
 }

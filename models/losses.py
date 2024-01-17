@@ -5,7 +5,7 @@ from .blocks import *
 
 # import some common builtin loss
 from torch.nn import CrossEntropyLoss 
-from torch.nn import Functional as F
+import torch.nn.functional as F
 
 from loguru import logger
 
@@ -23,7 +23,7 @@ class RegressionLoss(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         
-    def regression_loss(x, y):
+    def forward(self, x, y):
         x = F.normalize(x, dim=1)
         y = F.normalize(y, dim=1)
         return 2 - 2 * (x * y).sum(dim=-1)

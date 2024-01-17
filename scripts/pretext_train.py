@@ -74,8 +74,6 @@ if __name__ == "__main__":
         val_loader = None
 
         model = model_dict[cfg.MODEL.TYPE][0](cfg).cuda()
-        if cfg.EXPERIMENT.WORLD_SIZE > 1:
-            model = torch.nn.DataParallel(model)
 
         criterion = criterion_dict[cfg.MODEL.CRITERION.TYPE](cfg).cuda()
 

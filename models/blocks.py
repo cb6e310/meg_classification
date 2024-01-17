@@ -3,6 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
 
+from functools import wraps
+
+
+def MaybeSyncBatchnorm(is_distributed=None):
+    is_distributed = default(
+        is_distributed, dist.is_initialized() and dist.get_world_size() > 1
+    )
+    return nn.SyncBatchNorm if is_distributed else nn.BatchNorm1d
+
 
 class Identity(nn.Module):
     def __init__(self):
@@ -10,6 +19,7 @@ class Identity(nn.Module):
 
     def forward(self, x):
         return x
+
 
 class PrintLayer(nn.Module):
     def __init__(self):
@@ -19,6 +29,7 @@ class PrintLayer(nn.Module):
         print(x.shape)
         return x
 
+
 # define torch.Tensor.view in torch.nn
 class TensorView(nn.Module):
     def __init__(self):
@@ -26,6 +37,7 @@ class TensorView(nn.Module):
 
     def forward(self, x):
         return x.view(x.size(0), -1)
+
 
 class Unsqueeze(nn.Module):
     def __init__(self, dim):
@@ -35,6 +47,7 @@ class Unsqueeze(nn.Module):
     def forward(self, x):
         return torch.unsqueeze(x, self.dim)
 
+
 class Transpose(nn.Module):
     def __init__(self, dim0, dim1):
         super(Transpose, self).__init__()
@@ -42,6 +55,7 @@ class Transpose(nn.Module):
 
     def forward(self, x):
         return torch.transpose(x, self.dim0, self.dim1)
+
 
 class VARConv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=7):
@@ -74,28 +88,35 @@ class LFConv(nn.Module):
         x = x.unsqueeze(-2)
         return self.conv(x)
 
+
 class ResidualBlock(nn.Module):
     def __init__(self, inchannel, outchannel, stride=1):
         super(ResidualBlock, self).__init__()
         self.left = nn.Sequential(
-            nn.Conv2d(inchannel, outchannel, kernel_size=3, stride=stride, padding=1, bias=False),
+            nn.Conv2d(
+                inchannel, outchannel, kernel_size=3, stride=stride, padding=1, bias=False
+            ),
             nn.BatchNorm2d(outchannel),
             nn.ReLU(inplace=True),
-            nn.Conv2d(outchannel, outchannel, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(outchannel)
+            nn.Conv2d(
+                outchannel, outchannel, kernel_size=3, stride=1, padding=1, bias=False
+            ),
+            nn.BatchNorm2d(outchannel),
         )
         self.shortcut = nn.Sequential()
         if stride != 1 or inchannel != outchannel:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(inchannel, outchannel, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(outchannel)
+                nn.Conv2d(
+                    inchannel, outchannel, kernel_size=1, stride=stride, bias=False
+                ),
+                nn.BatchNorm2d(outchannel),
             )
-            
+
     def forward(self, x):
         out = self.left(x)
         out = out + self.shortcut(x)
         out = F.relu(out)
-        
+
         return out
 
 
@@ -108,7 +129,8 @@ class TemporalConv(nn.Module):
             kernel_size=kernel_size,
             padding=(kernel_size - 1) // 2,
         )
-    
+
+
 class GatherLayer(torch.autograd.Function):
     """Gather tensors from all process, supporting backward propagation."""
 

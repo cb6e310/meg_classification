@@ -1,8 +1,16 @@
 from models.blocks import *
 from models.losses import *
+from models.helpers import *
 from collections import OrderedDict
+import copy
 
 import torchvision.models as models
+import torch
+from torch import nn
+import torch.nn.functional as F
+import torch.distributed as dist
+
+from torchvision import transforms as T
 
 from loguru import logger
 
@@ -11,6 +19,213 @@ backbone_dict = {
     "resnet34": [models.resnet34, 512],
     "resnet50": [models.resnet50, 2048],
 }
+
+
+# loss fn
+
+
+# MLP class for projector and predictor
+
+
+def MLP(dim, projection_size, hidden_size=4096, sync_batchnorm=None):
+    return nn.Sequential(
+        nn.Linear(dim, hidden_size),
+        MaybeSyncBatchnorm(sync_batchnorm)(hidden_size),
+        nn.ReLU(inplace=True),
+        nn.Linear(hidden_size, projection_size),
+    )
+
+
+def SimSiamMLP(dim, projection_size, hidden_size=4096, sync_batchnorm=None):
+    return nn.Sequential(
+        nn.Linear(dim, hidden_size, bias=False),
+        MaybeSyncBatchnorm(sync_batchnorm)(hidden_size),
+        nn.ReLU(inplace=True),
+        nn.Linear(hidden_size, hidden_size, bias=False),
+        MaybeSyncBatchnorm(sync_batchnorm)(hidden_size),
+        nn.ReLU(inplace=True),
+        nn.Linear(hidden_size, projection_size, bias=False),
+        MaybeSyncBatchnorm(sync_batchnorm)(projection_size, affine=False),
+    )
+
+
+# a wrapper class for the base neural network
+# will manage the interception of the hidden layer output
+# and pipe it into the projecter and predictor nets
+class NetWrapper(nn.Module):
+    def __init__(
+        self,
+        net,
+        projection_size,
+        projection_hidden_size,
+        layer=-2,
+        use_simsiam_mlp=False,
+        sync_batchnorm=None,
+    ):
+        super().__init__()
+        self.net = net
+        self.layer = layer
+
+        self.projector = None
+        self.projection_size = projection_size
+        self.projection_hidden_size = projection_hidden_size
+
+        self.use_simsiam_mlp = use_simsiam_mlp
+        self.sync_batchnorm = sync_batchnorm
+
+        self.hidden = {}
+        self.hook_registered = False
+
+    def _find_layer(self):
+        if type(self.layer) == str:
+            modules = dict([*self.net.named_modules()])
+            return modules.get(self.layer, None)
+        elif type(self.layer) == int:
+            children = [*self.net.children()]
+            return children[self.layer]
+        return None
+
+    def _hook(self, _, input, output):
+        device = input[0].device
+        self.hidden[device] = flatten(output)
+
+    def _register_hook(self):
+        layer = self._find_layer()
+        assert layer is not None, f"hidden layer ({self.layer}) not found"
+        handle = layer.register_forward_hook(self._hook)
+        self.hook_registered = True
+
+    @singleton("projector")
+    def _get_projector(self, hidden):
+        _, dim = hidden.shape
+        create_mlp_fn = MLP if not self.use_simsiam_mlp else SimSiamMLP
+        projector = create_mlp_fn(
+            dim,
+            self.projection_size,
+            self.projection_hidden_size,
+            sync_batchnorm=self.sync_batchnorm,
+        )
+        return projector.to(hidden)
+
+    def get_representation(self, x):
+        if self.layer == -1:
+            return self.net(x)
+
+        if not self.hook_registered:
+            self._register_hook()
+
+        self.hidden.clear()
+        _ = self.net(x)
+        hidden = self.hidden[x.device]
+        self.hidden.clear()
+
+        assert hidden is not None, f"hidden layer {self.layer} never emitted an output"
+        return hidden
+
+    def forward(self, x, return_projection=True):
+        representation = self.get_representation(x)
+
+        if not return_projection:
+            return representation
+
+        projector = self._get_projector(representation)
+        projection = projector(representation)
+        return projection, representation
+
+
+# main class
+class BYOL(nn.Module):
+    def __init__(
+        self,
+        net,
+        image_size,
+        hidden_layer=-2,
+        projection_size=256,
+        projection_hidden_size=4096,
+        moving_average_decay=0.99,
+        use_momentum=True,
+        sync_batchnorm=None,
+    ):
+        super().__init__()
+        self.net = net
+
+        # default SimCLR augmentation
+
+        self.online_encoder = NetWrapper(
+            net,
+            projection_size,
+            projection_hidden_size,
+            layer=hidden_layer,
+            use_simsiam_mlp=not use_momentum,
+            sync_batchnorm=sync_batchnorm,
+        )
+
+        self.use_momentum = use_momentum
+        self.target_encoder = None
+        self.target_ema_updater = EMA(moving_average_decay)
+
+        self.online_predictor = MLP(
+            projection_size, projection_size, projection_hidden_size
+        )
+
+        # get device of network and make wrapper same device
+        device = get_module_device(net)
+        self.to(device)
+
+        # send a mock image tensor to instantiate singleton parameters
+        self.forward(torch.randn(2, 3, image_size, image_size, device=device))
+
+    @singleton("target_encoder")
+    def _get_target_encoder(self):
+        target_encoder = copy.deepcopy(self.online_encoder)
+        set_requires_grad(target_encoder, False)
+        return target_encoder
+
+    def reset_moving_average(self):
+        del self.target_encoder
+        self.target_encoder = None
+
+    def update_moving_average(self):
+        assert (
+            self.use_momentum
+        ), "you do not need to update the moving average, since you have turned off momentum for the target encoder"
+        assert self.target_encoder is not None, "target encoder has not been created yet"
+        update_moving_average(
+            self.target_ema_updater, self.target_encoder, self.online_encoder
+        )
+
+    def forward(
+        self, batch_view_1, batch_view_2, return_embedding=False, return_projection=True
+    ):
+        assert not (
+            self.training and batch_view_1.shape[0] == 1
+        ), "you must have greater than 1 sample when training, due to the batchnorm in the projection layer"
+
+        if return_embedding:
+            return self.online_encoder(batch_view_1, return_projection=return_projection)
+
+        views = torch.cat((batch_view_1, batch_view_2), dim=0)
+
+        online_projections, _ = self.online_encoder(views)
+        online_predictions = self.online_predictor(online_projections)
+
+        online_pred_one, online_pred_two = online_predictions.chunk(2, dim=0)
+
+        with torch.no_grad():
+            target_encoder = (
+                self._get_target_encoder() if self.use_momentum else self.online_encoder
+            )
+
+            target_projections, _ = target_encoder(views)
+            target_projections = target_projections.detach()
+
+            target_proj_one, target_proj_two = target_projections.chunk(2, dim=0)
+
+        loss_one = loss_fn(online_pred_one, target_proj_two.detach())
+        loss_two = loss_fn(online_pred_two, target_proj_one.detach())
+
+        loss = loss_one + loss_two
+        return loss.mean()
 
 
 class BaseNet(nn.Module):
@@ -238,47 +453,59 @@ class SimSiam(BaseNet):
         backbone_name = cfg.MODEL.ARGS.BACKBONE
 
 
-class BYOL(BaseNet):
-    def __init__(self, cfg):
-        super().__init__(cfg)
-        input_channels = cfg.DATASET.CHANNELS
-        num_classes = cfg.DATASET.NUM_CLASSES
+# class BYOL(BaseNet):
+#     def __init__(self, cfg):
+#         super().__init__(cfg)
+#         input_channels = cfg.DATASET.CHANNELS
+#         num_classes = cfg.DATASET.NUM_CLASSES
 
-        backbone_name = cfg.MODEL.ARGS.BACKBONE
-        projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+#         backbone_name = cfg.MODEL.ARGS.BACKBONE
+#         projection_hidden_size = cfg.MODEL.ARGS.PROJECTION_HIDDEN_SIZE
+#         projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
 
-        self.target_network= backbone_dict[backbone_name][0](pretrained=False)
-        self.online_network= backbone_dict[backbone_name][0](pretrained=False)
+#         self.target_network = backbone_dict[backbone_name][0](pretrained=False)
+#         self.online_network = backbone_dict[backbone_name][0](pretrained=False)
 
-        self.target_network.conv1 = nn.Conv2d(
-            input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
-        )
-        self.online_network.conv1 = nn.Conv2d(
-            input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
-        )
+#         self.target_network.conv1 = nn.Conv2d(
+#             input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+#         )
+#         self.online_network.conv1 = nn.Conv2d(
+#             input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+#         )
 
-        projection_input_dim = self.online_network.fc.in_features
-        self.projection_head = nn.Sequential(
-            nn.Linear(projection_input_dim, projection_input_dim),
-            nn.ReLU(),
-            nn.Linear(projection_input_dim, projection_dim),
-        )
+#         projection_input_dim = self.online_network.fc.in_features
 
-        self.target_network.fc = nn.Identity()
-        self.online_network.fc = nn.Identity()
+#         self.projection_head = nn.Sequential(
+#             nn.Linear(projection_input_dim, projection_hidden_size),
+#             MaybeSyncBatchnorm()(projection_hidden_size),
+#             nn.ReLU(),
+#             nn.Linear(projection_hidden_size, projection_dim),
+#         )
 
-    def forward(self, batch_view_1, batch_view_2):
-        # compute query feature
-        predictions_from_view_1 = self.projection_head(self.online_network(batch_view_1))
-        predictions_from_view_2 = self.projection_head(self.online_network(batch_view_2))
+#         self.online_predictor = nn.Sequential(
+#             nn.Linear(projection_input_dim)
+#         )
 
-        # compute key features
-        with torch.no_grad():
-            target_predictions_from_view_1 = self.projection_head(self.target_network(batch_view_1))
-            target_predictions_from_view_2 = self.projection_head(self.target_network(batch_view_2))
+#         self.target_network.fc = nn.Identity()
+#         self.online_network.fc = nn.Identity()
 
-        return predictions_from_view_1, predictions_from_view_2, target_predictions_from_view_1, target_predictions_from_view_2
-        
+#     def forward(self, batch_view_1, batch_view_2):
+#         # compute query feature
+#         predictions_from_view_1 = self.projection_head(self.online_network(batch_view_1))
+#         predictions_from_view_2 = self.projection_head(self.online_network(batch_view_2))
+
+#         # compute key features
+#         with torch.no_grad():
+#             target_predictions_from_view_1 = self.target_network(batch_view_1)
+#             target_predictions_from_view_2 = self.target_network(batch_view_2)
+
+#         return (
+#             predictions_from_view_1,
+#             predictions_from_view_2,
+#             target_predictions_from_view_1,
+#             target_predictions_from_view_2,
+#         )
+
 
 class LinearClassifier(nn.Module):
     def __init__(self, cfg):
