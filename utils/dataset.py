@@ -6,9 +6,13 @@ import numpy as np
 from loguru import logger
 
 from torch.utils.data import DataLoader
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, TensorDataset
 from .augmentations import DataTransform
 
+from utils.helpers import (
+    centerize_vary_length_series,
+    split_with_nan,
+)
 
 class SiameseDataset(Dataset):
     # Initialize your data, download, etc.
@@ -54,6 +58,29 @@ class SiameseDataset(Dataset):
 
     def __len__(self):
         return self.x_data.shape[0]
+
+
+def TS2Vec_Train_Dataset(train_data, cfg):
+    max_train_length = cfg.MODEL.ARGS.MAX_TRAIN_LENGTH
+    # swap timestamp and channel
+    train_data = train_data.transpose(0, 2, 1)
+    assert train_data.ndim == 3
+
+    if max_train_length is not None:
+        sections = train_data.shape[1] // max_train_length
+        if sections >= 2:
+            train_data = np.concatenate(
+                split_with_nan(train_data, sections, axis=1), axis=0
+            )
+
+    temporal_missing = np.isnan(train_data).all(axis=-1).any(axis=0)
+    if temporal_missing[0] or temporal_missing[-1]:
+        train_data = centerize_vary_length_series(train_data)
+
+    train_data = train_data[~np.isnan(train_data).all(axis=2).all(axis=1)]
+
+    train_dataset = TensorDataset(torch.from_numpy(train_data).to(torch.float))
+    return train_dataset
 
 
 def data_generator_all(data_path, configs, training_mode):
@@ -123,7 +150,7 @@ def data_generator(data_path, configs, training_mode, batch_size=128, drop_last=
 
 
 def get_data_loader_from_dataset(
-    dataset_path, train=True, batch_size=256, shuffle=True, siamese=False
+    dataset_path, cfg, train=True, batch_size=256, shuffle=True, siamese=False, 
 ):
     # local dataset
     if dataset_path.startswith("/home"):
@@ -154,10 +181,12 @@ def get_data_loader_from_dataset(
             and len(data) == len(labels)
         )
         assert data.dtype == np.float32 or torch.float32
-          # and label.dtype == np.longlong
+        # and label.dtype == np.longlong
 
         if siamese:
             dataset = SiameseDataset(data, labels)
+        elif cfg.MODEL.TYPE == "TS2Vec":
+            dataset = TS2Vec_Train_Dataset(data, cfg)
         else:
             dataset = torch.utils.data.TensorDataset(
                 torch.from_numpy(data), torch.from_numpy(labels)

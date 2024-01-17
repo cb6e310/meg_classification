@@ -21,12 +21,61 @@ backbone_dict = {
 }
 
 
-# loss fn
+class TSEncoder(nn.Module):
+    def __init__(
+        self,
+        cfg,
+    ):
+        super().__init__()
+        self.input_dims = cfg.DATASET.CHANNELS
+        self.output_dims = cfg.MODEL.ARGS.PROJECTION_DIM
+        self.hidden_dims = cfg.MODEL.ARGS.HIDDEN_SIZE
+        self.mask_mode = cfg.MODEL.ARGS.MASK_MODE
+        self.input_fc = nn.Linear(self.input_dims, self.hidden_dims)
+        self.feature_extractor = DilatedConvEncoder(
+            self.hidden_dims,
+            [self.hidden_dims] * cfg.MODEL.ARGS.DEPTH + [self.output_dims],
+            kernel_size=3,
+        )
+        self.repr_dropout = nn.Dropout(p=0.1)
+
+    def forward(self, x, mask=None):  # x: B x T x input_dims
+        nan_mask = ~x.isnan().any(axis=-1)
+        x[~nan_mask] = 0
+        x=x.float()
+        x = self.input_fc(x)  # B x T x Ch
+
+        # generate & apply mask
+        if mask is None:
+            if self.training:
+                mask = self.mask_mode
+            else:
+                mask = "all_true"
+
+        if mask == "binomial":
+            mask = generate_binomial_mask(x.size(0), x.size(1)).to(x.device)
+        elif mask == "continuous":
+            mask = generate_continuous_mask(x.size(0), x.size(1)).to(x.device)
+        elif mask == "all_true":
+            mask = x.new_full((x.size(0), x.size(1)), True, dtype=torch.bool)
+        elif mask == "all_false":
+            mask = x.new_full((x.size(0), x.size(1)), False, dtype=torch.bool)
+        elif mask == "mask_last":
+            mask = x.new_full((x.size(0), x.size(1)), True, dtype=torch.bool)
+            mask[:, -1] = False
+
+        mask &= nan_mask
+        x[~mask] = 0
+
+        # conv encoder
+        x = x.transpose(1, 2)  # B x Ch x T
+        x = self.repr_dropout(self.feature_extractor(x))  # B x Co x T
+        x = x.transpose(1, 2)  # B x T x Co
+
+        return x
 
 
 # MLP class for projector and predictor
-
-
 def MLP(dim, projection_size, hidden_size=4096, sync_batchnorm=None):
     return nn.Sequential(
         nn.Linear(dim, hidden_size),

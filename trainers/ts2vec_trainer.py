@@ -4,6 +4,7 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 
 import numpy as np
 
@@ -14,12 +15,17 @@ from utils.helpers import (
     accuracy,
     adjust_learning_rate,
     log_msg,
+    timing_start,
+    timing_end,
 )
 
 from utils.config import (
     show_cfg,
     log_msg,
     save_cfg,
+)
+from models.losses import (
+    hierarchical_contrastive_loss,
 )
 
 from loguru import logger
@@ -37,7 +43,8 @@ def torch_pad_nan(arr, left=0, right=0, dim=0):
         padshape[dim] = right
         arr = torch.cat((arr, torch.full(padshape, np.nan)), dim=dim)
     return arr
-    
+
+
 def pad_nan_to_target(array, target_length, axis=0, both_side=False):
     assert array.dtype in [np.float16, np.float32, np.float64]
     pad_size = target_length - array.shape[axis]
@@ -45,10 +52,11 @@ def pad_nan_to_target(array, target_length, axis=0, both_side=False):
         return array
     npad = [(0, 0)] * array.ndim
     if both_side:
-        npad[axis] = (pad_size // 2, pad_size - pad_size//2)
+        npad[axis] = (pad_size // 2, pad_size - pad_size // 2)
     else:
         npad[axis] = (0, pad_size)
-    return np.pad(array, pad_width=npad, mode='constant', constant_values=np.nan)
+    return np.pad(array, pad_width=npad, mode="constant", constant_values=np.nan)
+
 
 def split_with_nan(x, sections, axis=0):
     assert x.dtype in [np.float16, np.float32, np.float64]
@@ -58,92 +66,33 @@ def split_with_nan(x, sections, axis=0):
         arrs[i] = pad_nan_to_target(arrs[i], target_length, axis=axis)
     return arrs
 
+
 def take_per_row(A, indx, num_elem):
-    all_indx = indx[:,None] + np.arange(num_elem)
-    return A[torch.arange(all_indx.shape[0])[:,None], all_indx]
+    all_indx = indx[:, None] + np.arange(num_elem)
+    return A[torch.arange(all_indx.shape[0])[:, None], all_indx]
+
 
 def centerize_vary_length_series(x):
     prefix_zeros = np.argmax(~np.isnan(x).all(axis=-1), axis=1)
     suffix_zeros = np.argmax(~np.isnan(x[:, ::-1]).all(axis=-1), axis=1)
     offset = (prefix_zeros + suffix_zeros) // 2 - prefix_zeros
-    rows, column_indices = np.ogrid[:x.shape[0], :x.shape[1]]
+    rows, column_indices = np.ogrid[: x.shape[0], : x.shape[1]]
     offset[offset < 0] += x.shape[1]
     column_indices = column_indices - offset[:, np.newaxis]
     return x[rows, column_indices]
 
+
 def data_dropout(arr, p):
     B, T = arr.shape[0], arr.shape[1]
-    mask = np.full(B*T, False, dtype=np.bool)
-    ele_sel = np.random.choice(
-        B*T,
-        size=int(B*T*p),
-        replace=False
-    )
+    mask = np.full(B * T, False, dtype=np.bool)
+    ele_sel = np.random.choice(B * T, size=int(B * T * p), replace=False)
     mask[ele_sel] = True
     res = arr.copy()
     res[mask.reshape(B, T)] = np.nan
     return res
 
-def name_with_datetime(prefix='default'):
-    now = datetime.now()
-    return prefix + '_' + now.strftime("%Y%m%d_%H%M%S")
 
-def init_dl_program(
-    device_name,
-    seed=None,
-    use_cudnn=True,
-    deterministic=False,
-    benchmark=False,
-    use_tf32=False,
-    max_threads=None
-):
-    import torch
-    if max_threads is not None:
-        torch.set_num_threads(max_threads)  # intraop
-        if torch.get_num_interop_threads() != max_threads:
-            torch.set_num_interop_threads(max_threads)  # interop
-        try:
-            import mkl
-        except:
-            pass
-        else:
-            mkl.set_num_threads(max_threads)
-        
-    if seed is not None:
-        random.seed(seed)
-        seed += 1
-        np.random.seed(seed)
-        seed += 1
-        torch.manual_seed(seed)
-        
-    if isinstance(device_name, (str, int)):
-        device_name = [device_name]
-    
-    devices = []
-    for t in reversed(device_name):
-        t_device = torch.device(t)
-        devices.append(t_device)
-        if t_device.type == 'cuda':
-            assert torch.cuda.is_available()
-            torch.cuda.set_device(t_device)
-            if seed is not None:
-                seed += 1
-                torch.cuda.manual_seed(seed)
-    devices.reverse()
-    torch.backends.cudnn.enabled = use_cudnn
-    torch.backends.cudnn.deterministic = deterministic
-    torch.backends.cudnn.benchmark = benchmark
-    
-    if hasattr(torch.backends.cudnn, 'allow_tf32'):
-        torch.backends.cudnn.allow_tf32 = use_tf32
-        torch.backends.cuda.matmul.allow_tf32 = use_tf32
-        
-    return devices if len(devices) > 1 else devices[0]
-
-
-
-
-class Ts2vecTrainer:
+class TS2VecTrainer:
     def __init__(self, experiment_name, model, criterion, train_loader, val_loader, cfg):
         self.cfg = cfg
         self.train_loader = train_loader
@@ -151,7 +100,6 @@ class Ts2vecTrainer:
         self.criterion = criterion
         self.model = model
         self.optimizer = self.init_optimizer(cfg)
-        self.scheduler = self.init_scheduler(cfg)
         self.best_acc = -1
         self.best_epoch = 0
         self.resume_epoch = -1
@@ -194,7 +142,6 @@ class Ts2vecTrainer:
                 self.chkp = torch.load(chosen_chkp)
                 self.model.load_state_dict(self.chkp["model_state_dict"])
                 self.optimizer.load_state_dict(self.chkp["optimizer"])
-                self.scheduler.load_state_dict(self.chkp["scheduler"])
                 self.best_acc = self.chkp["best_acc"]
                 self.best_epoch = self.chkp["epoch"]
                 self.resume_epoch = self.chkp["epoch"]
@@ -236,7 +183,25 @@ class Ts2vecTrainer:
         self.n_epochs = 0
         self.n_iters = 0
 
-    def fit(self, train_data, n_epochs=None, n_iters=None, verbose=False):
+    def init_optimizer(self, cfg):
+        if cfg.SOLVER.TYPE == "SGD":
+            optimizer = optim.SGD(
+                self.model.parameters(),
+                lr=cfg.SOLVER.LR,
+                momentum=cfg.SOLVER.MOMENTUM,
+                weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            )
+        elif cfg.SOLVER.TYPE == "Adam":
+            optimizer = optim.Adam(
+                self.model.module.get_learnable_parameters(),
+                lr=cfg.SOLVER.LR,
+                weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            )
+        else:
+            raise NotImplementedError(cfg.SOLVER.TYPE)
+        return optimizer
+
+    def train(self, n_iters=None):
         """Training the TS2Vec model.
 
         Args:
@@ -248,29 +213,9 @@ class Ts2vecTrainer:
         Returns:
             loss_log: a list containing the training losses on each epoch.
         """
-        assert train_data.ndim == 3
-
-        if n_iters is None and n_epochs is None:
-            n_iters = (
-                200 if train_data.size <= 100000 else 600
-            )  # default param for n_iters
-
-        if self.max_train_length is not None:
-            sections = train_data.shape[1] // self.max_train_length
-            if sections >= 2:
-                train_data = np.concatenate(
-                    split_with_nan(train_data, sections, axis=1), axis=0
-                )
-
-        temporal_missing = np.isnan(train_data).all(axis=-1).any(axis=0)
-        if temporal_missing[0] or temporal_missing[-1]:
-            train_data = centerize_vary_length_series(train_data)
-
-        train_data = train_data[~np.isnan(train_data).all(axis=2).all(axis=1)]
-
-        optimizer = torch.optim.AdamW(self._net.parameters(), lr=self.lr)
 
         loss_log = []
+        n_epochs = self.cfg.SOLVER.EPOCHS
 
         while True:
             if n_epochs is not None and self.n_epochs >= n_epochs:
@@ -280,13 +225,8 @@ class Ts2vecTrainer:
             n_epoch_iters = 0
 
             interrupted = False
-            train_meters = {
-                "training_time": AverageMeter(),
-                # "data_time": AverageMeter(),
-                "losses": AverageMeter(),
-                "top1": AverageMeter(),
-            }
             for batch in self.train_loader:
+                timing_start("train 1")
                 if n_iters is not None and self.n_iters >= n_iters:
                     interrupted = True
                     break
@@ -314,52 +254,39 @@ class Ts2vecTrainer:
                     low=-crop_eleft, high=ts_l - crop_eright + 1, size=x.size(0)
                 )
 
-                optimizer.zero_grad()
-
-                out1 = self._net(
+                self.optimizer.zero_grad()
+                timing_end("train 1")
+                timing_start("train 2")
+                out1 = self.model(
                     take_per_row(x, crop_offset + crop_eleft, crop_right - crop_eleft)
                 )
                 out1 = out1[:, -crop_l:]
 
-                out2 = self._net(
+                out2 = self.model(
                     take_per_row(x, crop_offset + crop_left, crop_eright - crop_left)
                 )
                 out2 = out2[:, :crop_l]
-
+                logger.debug(f"out1: {out1.shape}, out2: {out2.shape}")
                 loss = hierarchical_contrastive_loss(
                     out1, out2, temporal_unit=self.temporal_unit
                 )
 
                 loss.backward()
-                optimizer.step()
-                self.net.update_parameters(self._net)
+                self.optimizer.step()
+                self.net.update_parameters(self.model)
 
                 cum_loss += loss.item()
                 n_epoch_iters += 1
 
                 self.n_iters += 1
-
-                train_meters["training_time"].update(time.time() - train_start_time)
-                train_meters["losses"].update(
-                    loss.cpu().detach().numpy().mean(), batch_size
-                )
-                msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|lr:{:.6f}".format(
-                    epoch,
-                    # train_meters["data_time"].avg,
-                    train_meters["training_time"].avg,
-                    train_meters["losses"].avg,
-                    self.optimizer.param_groups[0]["lr"],
-                )
-
+                timing_end("train 2")
             if interrupted:
                 break
 
             cum_loss /= n_epoch_iters
             loss_log.append(cum_loss)
-            if verbose:
-                print(f"Epoch #{self.n_epochs}: loss={cum_loss}")
+            logger.info(f"Epoch #{self.n_epochs}: loss={cum_loss}")
             self.n_epochs += 1
-
 
             # validate
             if self.cfg.EXPERIMENT.TASK == "pretext":
@@ -373,9 +300,7 @@ class Ts2vecTrainer:
                 "model_state_dict": self.model.state_dict(),
                 "model": self.cfg.MODEL.TYPE,
                 "optimizer": self.optimizer.state_dict(),
-                "scheduler": self.scheduler.state_dict(),
                 "best_acc": self.best_acc,
-                "loss": train_meters["losses"].avg,
                 "dataset": self.cfg.DATASET.TYPE,
             }
 
@@ -469,7 +394,7 @@ class Ts2vecTrainer:
 
         with torch.no_grad():
             output = []
-            for batch in loader:
+            for batch in self.train_loader:
                 x = batch[0]
                 if sliding_length is not None:
                     reprs = []
@@ -544,223 +469,3 @@ class Ts2vecTrainer:
 
         self.net.train(org_training)
         return output.numpy()
-
-    def save(self, fn):
-        """Save the model to a file.
-
-        Args:
-            fn (str): filename.
-        """
-        torch.save(self.net.state_dict(), fn)
-
-    def load(self, fn):
-        """Load the model from a file.
-
-        Args:
-            fn (str): filename.
-        """
-        state_dict = torch.load(fn, map_location=self.device)
-        self.net.load_state_dict(state_dict)
-
-    def log(self, epoch, log_dict):
-        if not self.cfg.EXPERIMENT.DEBUG:
-            import wandb
-
-            # wandb.log({"current lr": lr})
-            wandb.log(log_dict)
-        if log_dict["test_acc"] > self.best_acc:
-            self.best_acc = log_dict["test_acc"]
-            self.best_epoch = epoch
-            if not self.cfg.EXPERIMENT.DEBUG:
-                wandb.run.summary["best_acc"] = self.best_acc
-        # worklog.txt
-        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
-            lines = ["epoch: {}\t".format(epoch)]
-            for k, v in log_dict.items():
-                lines.append("{}: {:.4f}\t".format(k, v))
-            lines.append(os.linesep)
-            writer.writelines(lines)
-
-    def train(self, repetition_id=0):
-        assert train_data.ndim == 3
-
-        if n_iters is None and n_epochs is None:
-            n_iters = (
-                200 if train_data.size <= 100000 else 600
-            )  # default param for n_iters
-
-        if self.max_train_length is not None:
-            sections = train_data.shape[1] // self.max_train_length
-            if sections >= 2:
-                train_data = np.concatenate(
-                    split_with_nan(train_data, sections, axis=1), axis=0
-                )
-
-        temporal_missing = np.isnan(train_data).all(axis=-1).any(axis=0)
-        if temporal_missing[0] or temporal_missing[-1]:
-            train_data = centerize_vary_length_series(train_data)
-
-        train_data = train_data[~np.isnan(train_data).all(axis=2).all(axis=1)]
-
-        train_dataset = TensorDataset(torch.from_numpy(train_data).to(torch.float))
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=min(self.batch_size, len(train_dataset)),
-            shuffle=True,
-            drop_last=True,
-        )
-
-        optimizer = torch.optim.AdamW(self._net.parameters(), lr=self.lr)
-
-        loss_log = []
-        epoch = 0
-        if self.resume_epoch != -1:
-            epoch = self.resume_epoch + 1
-        # if self.cfg.EXPERIMENT.RESUME and self.cfg.EXPERIMENT.CHECKPOINT != "":
-        #     epoch = state["epoch"] + 1
-        #     self.distiller.load_state_dict(state["model"])
-        #     self.optimizer.load_state_dict(state["optimizer"])
-        #     self.best_acc = state["best_acc"]
-        while epoch < self.cfg.SOLVER.EPOCHS:
-            self.train_epoch(epoch, repetition_id=repetition_id)
-            epoch += 1
-        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
-            writer.write(
-                "repetition_id:{}\tbest_acc:{:.4f}\tepoch:{}".format(
-                    repetition_id, float(self.best_acc), self.best_epoch
-                )
-            )
-            writer.write(os.linesep + "-" * 25 + os.linesep)
-        return self.best_acc
-
-    def train_epoch(self, epoch, repetition_id=0):
-        lr = self.cfg.SOLVER.LR
-        train_meters = {
-            "training_time": AverageMeter(),
-            # "data_time": AverageMeter(),
-            "losses": AverageMeter(),
-            "top1": AverageMeter(),
-        }
-        num_iter = len(self.train_loader)
-        pbar = tqdm(range(num_iter))
-
-        # train loops
-        self.model.train()
-        for idx, data in enumerate(self.train_loader):
-            msg = self.train_iter(data, epoch, train_meters, idx)
-            pbar.set_description(log_msg(msg, "TRAIN"))
-            pbar.update()
-
-        # update lr
-        # get current lr
-        lr = self.optimizer.param_groups[0]["lr"]
-        if lr > self.cfg.SOLVER.SCHEDULER.MIN_LR:
-            self.scheduler.step()
-
-        pbar.close()
-
-        # validate
-        if self.cfg.EXPERIMENT.TASK == "pretext":
-            test_acc, test_loss = 0, 0
-        else:
-            test_acc, test_loss = validate(self.val_loader, self.model)
-
-        # log
-        log_dict = OrderedDict(
-            {
-                "train_acc": train_meters["top1"].avg,
-                "train_loss": train_meters["losses"].avg,
-                "test_acc": test_acc,
-                "test_loss": test_loss,
-            }
-        )
-        self.log(epoch, log_dict)
-        # saving checkpoint
-        # saving occasional checkpoints
-
-        state = {
-            "epoch": epoch,
-            "model_state_dict": self.model.state_dict(),
-            "model": self.cfg.MODEL.TYPE,
-            "optimizer": self.optimizer.state_dict(),
-            "scheduler": self.scheduler.state_dict(),
-            "best_acc": self.best_acc,
-            "loss": train_meters["losses"].avg,
-            "dataset": self.cfg.DATASET.TYPE,
-        }
-
-        if (epoch + 1) % self.cfg.EXPERIMENT.CHECKPOINT_GAP == 0:
-            logger.info("Saving checkpoint to {}".format(self.log_path))
-            chkp_path = os.path.join(
-                self.log_path,
-                "checkpoints",
-                "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
-            )
-            torch.save(state, chkp_path)
-
-        # save best checkpoint with loss or accuracy
-        if self.cfg.EXPERIMENT.TASK != "pretext":
-            if test_acc > self.best_acc:
-                chkp_path = os.path.join(
-                    self.log_path,
-                    "checkpoints",
-                    "epoch_best_{}_chkp.tar".format(repetition_id),
-                )
-                torch.save(state, chkp_path)
-
-    def train_iter(self, data, epoch, train_meters, data_itx: int = 0):
-        self.optimizer.zero_grad()
-        train_start_time = time.time()
-
-        # train_meters["data_time"].update(time.time() - train_start_time)
-        if self.cfg.MODEL.ARGS.SIAMESE:
-            _, _, x_i, x_j, _ = data
-            x_i = x_i.float()
-            x_j = x_j.float()
-            x_i = x_i.cuda(non_blocking=True)
-            x_j = x_j.cuda(non_blocking=True)
-            batch_size = x_i.size(0)
-
-            # forward
-            _, _, z_i, z_j = self.model(x_i, x_j)
-            loss = self.criterion(z_i, z_j)
-            loss = loss.mean()
-            # print(loss)
-        else:
-            data, target = data
-            data = data.float()
-            data = data.cuda(non_blocking=True)
-            target = target.cuda(non_blocking=True)
-            batch_size = data.size(0)
-
-            # forward
-            preds, loss = self.model(data, target)
-            loss = loss.mean()
-
-        # backward
-        loss.backward()
-        self.optimizer.step()
-
-        train_meters["training_time"].update(time.time() - train_start_time)
-        train_meters["losses"].update(loss.cpu().detach().numpy().mean(), batch_size)
-        if not self.cfg.EXPERIMENT.TASK == "pretext":
-            acc1, _ = accuracy(preds, target, topk=(1, 2))
-            train_meters["top1"].update(acc1[0], batch_size)
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}|lr:{:.6f}".format(
-                epoch,
-                # train_meters["data_time"].avg,
-                train_meters["training_time"].avg,
-                train_meters["losses"].avg,
-                train_meters["top1"].avg,
-                self.optimizer.param_groups[0]["lr"],
-            )
-        # print info
-        else:
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|lr:{:.6f}".format(
-                epoch,
-                # train_meters["data_time"].avg,
-                train_meters["training_time"].avg,
-                train_meters["losses"].avg,
-                self.optimizer.param_groups[0]["lr"],
-            )
-        return msg

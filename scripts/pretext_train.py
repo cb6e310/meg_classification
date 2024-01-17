@@ -63,10 +63,12 @@ if __name__ == "__main__":
         # set the random number seed
         setup_seed(cfg.EXPERIMENT.SEED + repetition_id)
         # init dataloader & models
+        
         train_loader = get_data_loader_from_dataset(
             cfg.DATASET.ROOT
             + "/{}".format(cfg.DATASET.TYPE)
             + "/train",
+            cfg,
             train=True,
             batch_size=cfg.SOLVER.BATCH_SIZE,
             siamese=cfg.MODEL.ARGS.SIAMESE,
@@ -81,7 +83,7 @@ if __name__ == "__main__":
         trainer = trainer_dict[cfg.SOLVER.TRAINER](
             experiment_name, model, criterion, train_loader, val_loader, cfg
         )
-        best_acc = trainer.train(repetition_id=repetition_id)
+        best_acc = trainer.train()
         best_acc_l.append(float(best_acc))
 
     print(
