@@ -1,5 +1,5 @@
 EXPERIMENT:
-  NAME: "byol_linear_eval"
+  NAME: "simsiam_linear_eval"
   TAG: "baselines"
   PROJECT: "debug project"
   DEBUG: True 
@@ -17,7 +17,7 @@ DATASET:
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "BYOL"
+  TYPE: "SimSiam"
   ARGS:
     BACKBONE: "resnet50"
     TEMPERATURE: 0.5
