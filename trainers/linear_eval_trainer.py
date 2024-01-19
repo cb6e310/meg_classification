@@ -193,7 +193,7 @@ class LinearEvalTrainer:
             x = x.float()
             # get encoding
             with torch.no_grad():
-                h, _, z, _ = self.model(x, x)
+                h = self.model(x, x, return_embedding=True, return_projection=False)
 
             h = h.detach()
 
@@ -355,7 +355,6 @@ class LinearEvalTrainer:
         train_meters["top1"].update(acc1[0], batch_size)
         msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}|lr:{:.6f}".format(
             epoch,
-            # train_meters["data_time"].avg,
             train_meters["training_time"].avg,
             train_meters["losses"].avg,
             train_meters["top1"].avg,

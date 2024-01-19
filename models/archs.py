@@ -14,6 +14,9 @@ from torchvision import transforms as T
 
 from loguru import logger
 
+from utils.helpers import timing_start, timing_end
+
+
 backbone_dict = {
     "resnet18": [models.resnet18, 512],
     "resnet34": [models.resnet34, 512],
@@ -42,7 +45,7 @@ class TSEncoder(nn.Module):
     def forward(self, x, mask=None):  # x: B x T x input_dims
         nan_mask = ~x.isnan().any(axis=-1)
         x[~nan_mask] = 0
-        x=x.float()
+        x = x.float()
         x = self.input_fc(x)  # B x T x Ch
 
         # generate & apply mask
@@ -66,11 +69,12 @@ class TSEncoder(nn.Module):
 
         mask &= nan_mask
         x[~mask] = 0
-
         # conv encoder
+        timing_start("TSEncoder 1")
         x = x.transpose(1, 2)  # B x Ch x T
         x = self.repr_dropout(self.feature_extractor(x))  # B x Co x T
         x = x.transpose(1, 2)  # B x T x Co
+        timing_end("TSEncoder 1")
 
         return x
 
@@ -494,16 +498,16 @@ class SimCLR(BaseNet):
 
         # self.fc = nn.Linear(projection_dim, num_classes)
 
-    def forward(self, x_i, x_j):
+    def forward(self, x_i, x_j, return_embedding=False, return_projection=True):
         h_i = self.backbone(x_i)
         h_j = self.backbone(x_j)
-
         z_i = F.normalize(self.projection_head(h_i), dim=-1)
         z_j = F.normalize(self.projection_head(h_j), dim=-1)
         # logger.debug(z_i.shape)
 
         # loss = self.compute_loss(z_i, z_j)
-
+        if return_embedding:
+            return h_i 
         return h_i, h_j, z_i, z_j
 
 

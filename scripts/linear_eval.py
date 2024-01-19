@@ -65,20 +65,22 @@ if __name__ == "__main__":
         # init dataloader & models
         train_loader = get_data_loader_from_dataset(
             cfg.DATASET.ROOT + "/{}".format(cfg.DATASET.TYPE) + "/train",
+            cfg,
             train=True,
             batch_size=cfg.SOLVER.BATCH_SIZE,
             siamese=cfg.MODEL.ARGS.SIAMESE,
         )
         val_loader = get_data_loader_from_dataset(
             cfg.DATASET.ROOT + "/{}".format(cfg.DATASET.TYPE) + "/test",
+            cfg,
             train=False,
             batch_size=cfg.SOLVER.BATCH_SIZE,
             siamese=cfg.MODEL.ARGS.SIAMESE,
         )
 
         encoder = model_dict[cfg.MODEL.TYPE][0](cfg).cuda()
-        if cfg.EXPERIMENT.WORLD_SIZE > 1:
-            encoder = torch.nn.DataParallel(encoder)
+        # if cfg.EXPERIMENT.WORLD_SIZE > 1:
+        #     encoder = torch.nn.DataParallel(encoder)
 
         pretrained_dict = torch.load(cfg.MODEL.ARGS.PRETRAINED_PATH)
 

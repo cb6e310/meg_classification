@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
+
 import numpy as np
 
 from collections import OrderedDict
@@ -217,6 +218,7 @@ class TS2VecTrainer:
         loss_log = []
         n_epochs = self.cfg.SOLVER.EPOCHS
 
+        
         while True:
             if n_epochs is not None and self.n_epochs >= n_epochs:
                 break
@@ -226,7 +228,6 @@ class TS2VecTrainer:
 
             interrupted = False
             for batch in self.train_loader:
-                timing_start("train 1")
                 if n_iters is not None and self.n_iters >= n_iters:
                     interrupted = True
                     break
@@ -255,8 +256,6 @@ class TS2VecTrainer:
                 )
 
                 self.optimizer.zero_grad()
-                timing_end("train 1")
-                timing_start("train 2")
                 out1 = self.model(
                     take_per_row(x, crop_offset + crop_eleft, crop_right - crop_eleft)
                 )
@@ -279,7 +278,6 @@ class TS2VecTrainer:
                 n_epoch_iters += 1
 
                 self.n_iters += 1
-                timing_end("train 2")
             if interrupted:
                 break
 

@@ -5,8 +5,16 @@ import numpy as np
 from time import time
 from loguru import logger
 
+def check_model_device(model):
+    device = None
+    for param in model.parameters():
+        if device is None:
+            device = param.device
+        elif param.device != device:
+            return False  # Found a parameter on a different device
+    return True
+
 _timing_start_dict = {}
-# check code block time cost
 def timing_start(name: str):
     global _timing_start_dict
     _timing_start_dict[name] = time()

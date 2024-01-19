@@ -1,8 +1,8 @@
 EXPERIMENT:
-  NAME: "ts2vec_pretext"
+  NAME: "simsiam_pretext"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True
+  PROJECT: "baseline project"
+  DEBUG: False 
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training
@@ -17,26 +17,23 @@ DATASET:
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "TS2Vec"
+  TYPE: "SimSiam"
   ARGS:
-    TEMPERATURE: 0.5
-    PROJECTION_DIM: 512
-    DEPTH: 10
-    HIDDEN_SIZE: 64
-    MASK_MODE: "binomial"
-    MAX_TRAIN_LENGTH: 3000
-    TEMPORAL_UNIT: 0
+    BACKBONE: "resnet50"
+    SIAMESE: True
+    USE_MOMENTUM: False  # True for BYOL, False for SimSiam
+    PROJECTION_DIM: 256
+    PROJECTION_HIDDEN_SIZE: 4096
+    TAU_BASE: 0.996
     # SOURCE_CHANNELS: 36
   CRITERION:
-    TYPE: "NT_Xent"
-    ARGS:
-      TEMPERATURE: 0.5
+    TYPE: "RegressionLoss"
       # SOURCE_CHANNELS: 36
 SOLVER:
+  TRAINER: "BYOL"
   BATCH_SIZE: 512
-  EPOCHS: 1
+  EPOCHS: 400
   LR: 0.05
-  TRAINER: "TS2Vec"
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99

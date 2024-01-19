@@ -7,6 +7,10 @@ from .helpers import *
 
 from functools import wraps
 
+from utils.helpers import timing_start, timing_end
+
+from loguru import logger
+
 
 def MaybeSyncBatchnorm(is_distributed=None):
     is_distributed = default(
@@ -165,6 +169,8 @@ class SamePadConv(nn.Module):
         self.remove = 1 if self.receptive_field % 2 == 0 else 0
         
     def forward(self, x):
+        logger.info(x.shape)
+        logger.info(self.conv.weight.shape)
         out = self.conv(x)
         if self.remove > 0:
             out = out[:, :, : -self.remove]
@@ -195,11 +201,12 @@ class DilatedConvEncoder(nn.Module):
                 channels[i-1] if i > 0 else in_channels,
                 channels[i],
                 kernel_size=kernel_size,
-                dilation=2**i,
+                dilation=2,
                 final=(i == len(channels)-1)
             )
             for i in range(len(channels))
         ])
         
     def forward(self, x):
-        return self.net(x)
+        feat = self.net(x)
+        return feat
