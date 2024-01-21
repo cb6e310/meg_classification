@@ -156,7 +156,7 @@ class GatherLayer(torch.autograd.Function):
 
 # ts2vec
 class SamePadConv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, dilation=1, groups=1):
+    def __init__(self, in_channels, out_channels, kernel_size, dilation=1,stride = 1, groups=1):
         super().__init__()
         self.receptive_field = (kernel_size - 1) * dilation + 1
         padding = self.receptive_field // 2
@@ -164,25 +164,28 @@ class SamePadConv(nn.Module):
             in_channels, out_channels, kernel_size,
             padding=padding,
             dilation=dilation,
+            stride=stride,
             groups=groups
         )
         self.remove = 1 if self.receptive_field % 2 == 0 else 0
         
     def forward(self, x):
-        logger.info(x.shape)
-        logger.info(self.conv.weight.shape)
         out = self.conv(x)
         if self.remove > 0:
             out = out[:, :, : -self.remove]
         return out
     
-# ts2vec    
+# ts2vec
 class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, dilation, final=False):
+    def __init__(self, in_channels, out_channels, kernel_size, dilation, stride = 1, final=False):
         super().__init__()
-        self.conv1 = SamePadConv(in_channels, out_channels, kernel_size, dilation=dilation)
-        self.conv2 = SamePadConv(out_channels, out_channels, kernel_size, dilation=dilation)
-        self.projector = nn.Conv1d(in_channels, out_channels, 1) if in_channels != out_channels or final else None
+        self.conv1 = SamePadConv(in_channels, out_channels, kernel_size,stride=stride, dilation=dilation)
+        self.conv2 = SamePadConv(out_channels, out_channels, kernel_size,stride=1, dilation=dilation)
+        if stride==1:
+            self.projector = nn.Conv1d(in_channels, out_channels, 1) if in_channels != out_channels or final else None
+        else:
+            self.projector = nn.Conv1d(in_channels, out_channels, 1,stride=stride)
+
     
     def forward(self, x):
         residual = x if self.projector is None else self.projector(x)
@@ -194,19 +197,19 @@ class ConvBlock(nn.Module):
 
 # ts2vec
 class DilatedConvEncoder(nn.Module):
-    def __init__(self, in_channels, channels, kernel_size):
+    def __init__(self, in_channels, channels, kernel_size,stride = 1):
         super().__init__()
         self.net = nn.Sequential(*[
             ConvBlock(
                 channels[i-1] if i > 0 else in_channels,
                 channels[i],
                 kernel_size=kernel_size,
-                dilation=2,
+                dilation=2**i,
+                stride = stride,
                 final=(i == len(channels)-1)
             )
             for i in range(len(channels))
         ])
         
     def forward(self, x):
-        feat = self.net(x)
-        return feat
+        return self.net(x)

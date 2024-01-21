@@ -1,8 +1,8 @@
 EXPERIMENT:
   NAME: "simclr_linear_eval"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True 
+  PROJECT: "baseline project"
+  DEBUG: False
   REPETITION_NUM: 5 # Number of repetition times
   TASK: "train"
   RESUME : False  # Resume training

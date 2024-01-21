@@ -1,8 +1,8 @@
 EXPERIMENT:
   NAME: "byol_pretext"
   TAG: "baselines"
-  PROJECT: "baseline project"
-  DEBUG: False 
+  PROJECT: "debug project"
+  DEBUG: True
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training

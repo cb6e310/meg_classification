@@ -11,6 +11,7 @@ model_dict = {
     "SimCLR": (SimCLR, ""),
     "LinearClassifier": (LinearClassifier, ""),
     "BYOL": (BYOL, ""),
+    "SimSiam": (BYOL, ""),
     "TS2Vec": (TSEncoder, ""),
 }
 
