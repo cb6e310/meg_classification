@@ -1,39 +1,38 @@
 EXPERIMENT:
   NAME: "simclr_linear_eval"
   TAG: "baselines"
-  PROJECT: "baseline project"
-  DEBUG: False
+  PROJECT: "debug project"
+  DEBUG: True 
   REPETITION_NUM: 5 # Number of repetition times
   TASK: "train"
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
 DATASET:
-  ROOT: "/home/song/datasets/timeseries/"
-  TYPE: "HAR"
-  CHANNELS: 9 
-  POINTS: 128
-  NUM_CLASSES: 6
+  ROOT: "/home/song/datasets/MEG"
+  TYPE: "DecMeg"
+  CHANNELS: 204
+  POINTS: 250
+  NUM_CLASSES: 2
   TEST:
     BATCH_SIZE: 128
 MODEL:
   TYPE: "SimCLR"
   ARGS:
-    BACKBONE: "resnet50"
+    BACKBONE: "varcnn"
     TEMPERATURE: 0.5
     SIAMESE: True
-    N_FEATURES: 2048 # backbone output feature dimension
+    N_FEATURES: 36 # backbone output feature dimension
     PROJECTION_DIM: 128
     CLASSIFIER: "LinearClassifier"
-    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_with_NTXent_2024-03-22_02-49-42/checkpoints/epoch_49_0_chkp.tar"
-
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_with_NTXent_2024-03-20_12-58-42/checkpoints/epoch_299_0_chkp.tar"
     # SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "CE"
 SOLVER:
   BATCH_SIZE: 512
   EPOCHS: 400
-  LR: 0.5
+  LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99

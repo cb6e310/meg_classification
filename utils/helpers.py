@@ -75,15 +75,15 @@ def centerize_vary_length_series(x):
     column_indices = column_indices - offset[:, np.newaxis]
     return x[rows, column_indices]
 
-def setup_seed(seed):
+def setup_benchmark(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
     random.seed(seed)
     # 尽可能提高确定性
-    # torch.backends.cudnn.enabled = False
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False # True will cause dilated conv much slower and fatty
     # torch.use_deterministic_algorithms(True)
 
 

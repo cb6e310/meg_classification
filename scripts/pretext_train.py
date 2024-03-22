@@ -13,7 +13,7 @@ from utils.config import (
 )
 from utils.helpers import (
     log_msg,
-    setup_seed,
+    setup_benchmark,
 )
 from utils.dataset import get_data_loader_from_dataset
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     best_acc_l = []
     for repetition_id in range(cfg.EXPERIMENT.REPETITION_NUM):
         # set the random number seed
-        setup_seed(cfg.EXPERIMENT.SEED + repetition_id)
+        setup_benchmark(cfg.EXPERIMENT.SEED + repetition_id)
         # init dataloader & models
         
         train_loader = get_data_loader_from_dataset(

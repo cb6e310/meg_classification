@@ -24,10 +24,10 @@ class SiameseDataset(Dataset):
         if len(X_train.shape) < 3:
             X_train = X_train.unsqueeze(2)
 
-        if (
-            X_train.shape.index(min(X_train.shape)) != 1
-        ):  # make sure the Channels in second dim
-            X_train = X_train.permute(0, 2, 1)
+        # if (
+        #     X_train.shape.index(min(X_train.shape)) != 1
+        # ):  # make sure the Channels in second dim
+        #     X_train = X_train.permute(0, 2, 1)
 
         if isinstance(X_train, np.ndarray):
             self.x_data = torch.from_numpy(X_train)
@@ -46,6 +46,7 @@ class SiameseDataset(Dataset):
         )
 
         self.aug1, self.aug2 = DataTransform(self.x_data)
+        logger.info("SiameseDataset: Augmentation done")
 
     def __getitem__(self, index):
         return (
@@ -168,6 +169,9 @@ def get_data_loader_from_dataset(
                 cur_dataset = np.load(os.path.join(dataset_path, cur_file))
                 cur_data = cur_dataset["data"]
                 cur_labels = cur_dataset["labels"]
+
+            else:
+                continue
             data.append(cur_data)
             labels.append(cur_labels)
         data = np.concatenate(data, axis=0)

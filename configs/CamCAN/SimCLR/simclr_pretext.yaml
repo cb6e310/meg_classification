@@ -1,25 +1,25 @@
 EXPERIMENT:
   NAME: "simclr_with_NTXent"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True 
+  PROJECT: "baseline project"
+  DEBUG: False 
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
 DATASET:
-  ROOT: "/home/song/datasets/timeseries/"
-  TYPE: "HAR"
-  CHANNELS: 9
-  POINTS: 128 
-  NUM_CLASSES: 6
+  ROOT: "/home/song/datasets/MEG"
+  TYPE: "CamCAN"
+  CHANNELS: 204
+  POINTS: 100
+  NUM_CLASSES: 2
   TEST:
     BATCH_SIZE: 128
 MODEL:
   TYPE: "SimCLR"
   ARGS:
-    BACKBONE: "resnet50"
+    BACKBONE: "varcnn"
     TEMPERATURE: 0.5
     SIAMESE: True
     PROJECTION_DIM: 128

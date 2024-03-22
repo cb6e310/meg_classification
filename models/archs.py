@@ -17,10 +17,15 @@ from loguru import logger
 from utils.helpers import timing_start, timing_end
 
 
+def create_VARCNNBackbone(cfg):
+    return VARCNNBackbone(cfg)
+
+
 backbone_dict = {
     "resnet18": [models.resnet18, 512],
     "resnet34": [models.resnet34, 512],
     "resnet50": [models.resnet50, 2048],
+    "varcnn": [create_VARCNNBackbone, 1800],
 }
 
 
@@ -31,48 +36,59 @@ class TSEncoder(nn.Module):
         self.output_dims = cfg.MODEL.ARGS.PROJECTION_DIM
         self.hidden_dims = cfg.MODEL.ARGS.HIDDEN_SIZE
         self.mask_mode = cfg.MODEL.ARGS.MASK_MODE
+        self.depth = cfg.MODEL.ARGS.DEPTH
         self.input_fc = nn.Linear(self.input_dims, self.hidden_dims)
         self.feature_extractor = DilatedConvEncoder(
             self.hidden_dims,
             [self.hidden_dims] * self.depth + [self.output_dims],
-            kernel_size=3
+            kernel_size=3,
         )
         self.repr_dropout = nn.Dropout(p=0.1)
-        
-    def forward(self, x, mask=None):  # x: B x T x input_dims
+
+    def forward(
+        self, x, _, mask=None, return_embedding=True, return_projection=False
+    ):  # x: B x T x input_dims
+        x = x.transpose(1, 2).squeeze()
         nan_mask = ~x.isnan().any(axis=-1)
         x[~nan_mask] = 0
         x = self.input_fc(x)  # B x T x Ch
-        
+
         # generate & apply mask
         if mask is None:
             if self.training:
                 mask = self.mask_mode
             else:
-                mask = 'all_true'
-        
-        if mask == 'binomial':
+                mask = "all_true"
+
+        if mask == "binomial":
             mask = generate_binomial_mask(x.size(0), x.size(1)).to(x.device)
-        elif mask == 'continuous':
+        elif mask == "continuous":
             mask = generate_continuous_mask(x.size(0), x.size(1)).to(x.device)
-        elif mask == 'all_true':
+        elif mask == "all_true":
             mask = x.new_full((x.size(0), x.size(1)), True, dtype=torch.bool)
-        elif mask == 'all_false':
+        elif mask == "all_false":
             mask = x.new_full((x.size(0), x.size(1)), False, dtype=torch.bool)
-        elif mask == 'mask_last':
+        elif mask == "mask_last":
             mask = x.new_full((x.size(0), x.size(1)), True, dtype=torch.bool)
             mask[:, -1] = False
-        
+
         mask &= nan_mask
         x[~mask] = 0
-        
+
         # conv encoder
         x = x.transpose(1, 2)  # B x Ch x T
         x = self.feature_extractor(x)
         if self.repr_dropout is not None:
             x = self.repr_dropout(x)  # B x Co x T
         x = x.transpose(1, 2)  # B x T x Co
-        
+
+        x = F.max_pool1d(x.transpose(1, 2).contiguous(), kernel_size=x.size(1)).transpose(
+            1, 2
+        )
+        x = x.squeeze()
+        # normalize feature
+        x = F.normalize(x, dim=-1)
+
         return x
 
 
@@ -353,6 +369,46 @@ class VARCNN(BaseNet):
         return preds, loss
 
 
+class VARCNNBackbone(BaseNet):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        meg_channels = cfg.DATASET.CHANNELS
+        points_length = cfg.DATASET.POINTS
+        num_classes = cfg.DATASET.NUM_CLASSES
+
+        sources_channels = 36
+
+        Conv = VARConv
+
+        # refact nn.Sequential
+        self.transpose0 = Transpose(1, 2)
+        self.Spatial = nn.Linear(meg_channels, sources_channels)
+        self.transpose1 = Transpose(1, 2)
+        self.Temporal_VAR = Conv(
+            in_channels=sources_channels,
+            out_channels=sources_channels,
+            kernel_size=7,
+        )
+        self.unsqueeze = Unsqueeze(-3)
+        self.active = nn.ReLU()
+        self.pool = nn.MaxPool2d((1, 2), (1, 2))
+        self.view = TensorView()
+        self.dropout = nn.Dropout(p=0.5)
+
+    def forward(self, x, target=None):
+        x = self.transpose0(x)
+        x = x.squeeze()
+        x = self.Spatial(x)
+        x = self.transpose1(x)
+        x = self.Temporal_VAR(x)
+        x = self.unsqueeze(x)
+        x = self.active(x)
+        x = self.pool(x)
+        x = self.view(x)
+        x = self.dropout(x)
+        return x
+
+
 class LFCNN(BaseNet):
     def __init__(self, cfg):
         super().__init__()
@@ -479,17 +535,23 @@ class SimCLR(BaseNet):
         backbone_name = cfg.MODEL.ARGS.BACKBONE
         projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
 
-        self.backbone = backbone_dict[backbone_name][0](pretrained=False)
-        self.backbone.conv1 = nn.Conv2d(
-            input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
-        )
+        if "resnet" in backbone_name:
+            self.backbone = backbone_dict[backbone_name][0](pretrained=False)
+            self.backbone.conv1 = nn.Conv2d(
+                input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+            )
+            self.projection_head = nn.Sequential(
+                nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features),
+                nn.ReLU(),
+                nn.Linear(self.backbone.fc.in_features, projection_dim),
+            )
+            self.backbone.fc = nn.Identity()
+        elif "varcnn" in backbone_name:
+            self.backbone = backbone_dict[backbone_name][0](cfg)
+            self.projection_head = nn.Sequential(
+                nn.Linear(backbone_dict[backbone_name][1], projection_dim),
+            )
         print(self.backbone)
-        self.projection_head = nn.Sequential(
-            nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features),
-            nn.ReLU(),
-            nn.Linear(self.backbone.fc.in_features, projection_dim),
-        )
-        self.backbone.fc = nn.Identity()
 
         # self.criterion = contrastive_loss(cfg)
 
@@ -504,7 +566,7 @@ class SimCLR(BaseNet):
 
         # loss = self.compute_loss(z_i, z_j)
         if return_embedding:
-            return h_i 
+            return h_i
         return h_i, h_j, z_i, z_j
 
 

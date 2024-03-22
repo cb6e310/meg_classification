@@ -12,7 +12,7 @@ model_dict = {
     "LinearClassifier": (LinearClassifier, ""),
     "BYOL": (BYOL, ""),
     "SimSiam": (BYOL, ""),
-    "TS2Vec": (TSEncoder, ""),
+    "TSEncoder": (TSEncoder, ""),
 }
 
 criterion_dict = {
