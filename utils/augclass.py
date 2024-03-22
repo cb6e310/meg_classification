@@ -1,9 +1,11 @@
 import numpy as np
-from models.basicaug import totensor
 import tsaug
 import torch
 import time
 from torch.nn.functional import interpolate
+
+def totensor(x):
+    return torch.from_numpy(x).type(torch.FloatTensor).cuda()
 
 class cutout():
     def __init__(self, perc=0.1) -> None:

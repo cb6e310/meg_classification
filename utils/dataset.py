@@ -14,7 +14,7 @@ from utils.helpers import (
     split_with_nan,
 )
 
-class SiameseDataset(Dataset):
+class SimpleDataset(Dataset):
     # Initialize your data, download, etc.
     def __init__(self, samples, labels):
         super(Dataset, self).__init__()
@@ -45,15 +45,13 @@ class SiameseDataset(Dataset):
             self.x_data.shape,
         )
 
-        self.aug1, self.aug2 = DataTransform(self.x_data)
-        logger.info("SiameseDataset: Augmentation done")
+        # self.aug1, self.aug2 = DataTransform(self.x_data)
+        # logger.info("SiameseDataset: Augmentation done")
 
     def __getitem__(self, index):
         return (
             self.x_data[index],
             self.y_data[index],
-            self.aug1[index],
-            self.aug2[index],
             index,
         )
 
@@ -84,70 +82,70 @@ def TS2Vec_Train_Dataset(train_data, cfg):
     return train_dataset
 
 
-def data_generator_all(data_path, configs, training_mode):
-    train_dataset = torch.load(os.path.join(data_path, "train.pt"))
-    valid_dataset = torch.load(os.path.join(data_path, "val.pt"))
-    test_dataset = torch.load(os.path.join(data_path, "test.pt"))
+# def data_generator_all(data_path, configs, training_mode):
+#     train_dataset = torch.load(os.path.join(data_path, "train.pt"))
+#     valid_dataset = torch.load(os.path.join(data_path, "val.pt"))
+#     test_dataset = torch.load(os.path.join(data_path, "test.pt"))
 
-    train_dataset = Load_Dataset(train_dataset, configs, training_mode)
-    valid_dataset = Load_Dataset(valid_dataset, configs, training_mode)
-    test_dataset = Load_Dataset(test_dataset, configs, training_mode)
+#     train_dataset = Load_Dataset(train_dataset, configs, training_mode)
+#     valid_dataset = Load_Dataset(valid_dataset, configs, training_mode)
+#     test_dataset = Load_Dataset(test_dataset, configs, training_mode)
 
-    # print(len(train_dataset)) # HAR: 7352 , wisdm: 2617
-    # print(len(valid_dataset)) # HAR: 1471, wisdm: 655
-    # print(len(test_dataset))  # HAR: 2947, wisdm: 819
+#     # print(len(train_dataset)) # HAR: 7352 , wisdm: 2617
+#     # print(len(valid_dataset)) # HAR: 1471, wisdm: 655
+#     # print(len(test_dataset))  # HAR: 2947, wisdm: 819
 
-    train_loader = torch.utils.data.DataLoader(
-        dataset=train_dataset,
-        batch_size=configs.batch_size,
-        shuffle=True,
-        drop_last=configs.drop_last,
-        num_workers=0,
-    )
+#     train_loader = torch.utils.data.DataLoader(
+#         dataset=train_dataset,
+#         batch_size=configs.batch_size,
+#         shuffle=True,
+#         drop_last=configs.drop_last,
+#         num_workers=0,
+#     )
 
-    valid_loader = torch.utils.data.DataLoader(
-        dataset=valid_dataset,
-        batch_size=configs.batch_size,
-        shuffle=False,
-        drop_last=configs.drop_last,
-        num_workers=0,
-    )
+#     valid_loader = torch.utils.data.DataLoader(
+#         dataset=valid_dataset,
+#         batch_size=configs.batch_size,
+#         shuffle=False,
+#         drop_last=configs.drop_last,
+#         num_workers=0,
+#     )
 
-    test_loader = torch.utils.data.DataLoader(
-        dataset=test_dataset,
-        batch_size=configs.batch_size,
-        shuffle=False,
-        drop_last=False,
-        num_workers=0,
-    )
+#     test_loader = torch.utils.data.DataLoader(
+#         dataset=test_dataset,
+#         batch_size=configs.batch_size,
+#         shuffle=False,
+#         drop_last=False,
+#         num_workers=0,
+#     )
 
-    return train_loader, valid_loader, test_loader
+#     return train_loader, valid_loader, test_loader
 
 
-def data_generator(data_path, configs, training_mode, batch_size=128, drop_last=True):
-    train_dataset = torch.load(os.path.join(data_path, "train.pt"))
-    test_dataset = torch.load(os.path.join(data_path, "test.pt"))
+# def data_generator(data_path, configs, training_mode, batch_size=128, drop_last=True):
+#     train_dataset = torch.load(os.path.join(data_path, "train.pt"))
+#     test_dataset = torch.load(os.path.join(data_path, "test.pt"))
 
-    train_dataset = Load_Dataset(train_dataset, configs, training_mode)
-    test_dataset = Load_Dataset(test_dataset, configs, training_mode)
+#     train_dataset = Load_Dataset(train_dataset, configs, training_mode)
+#     test_dataset = Load_Dataset(test_dataset, configs, training_mode)
 
-    train_loader = torch.utils.data.DataLoader(
-        dataset=train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        drop_last=drop_last,
-        num_workers=0,
-    )
+#     train_loader = torch.utils.data.DataLoader(
+#         dataset=train_dataset,
+#         batch_size=batch_size,
+#         shuffle=True,
+#         drop_last=drop_last,
+#         num_workers=0,
+#     )
 
-    test_loader = torch.utils.data.DataLoader(
-        dataset=test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        drop_last=False,
-        num_workers=0,
-    )
+#     test_loader = torch.utils.data.DataLoader(
+#         dataset=test_dataset,
+#         batch_size=batch_size,
+#         shuffle=False,
+#         drop_last=False,
+#         num_workers=0,
+#     )
 
-    return train_loader, test_loader
+#     return train_loader, test_loader
 
 
 def get_data_loader_from_dataset(
@@ -188,7 +186,7 @@ def get_data_loader_from_dataset(
         # and label.dtype == np.longlong
 
         if siamese:
-            dataset = SiameseDataset(data, labels)
+            dataset = SimpleDataset(data, labels)
         elif cfg.MODEL.TYPE == "TS2Vec":
             dataset = TS2Vec_Train_Dataset(data, cfg)
         else:

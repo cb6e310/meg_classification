@@ -284,7 +284,7 @@ class BYOLTrainer:
         train_start_time = time.time()
 
         # train_meters["data_time"].update(time.time() - train_start_time)
-        _, _, x_i, x_j, _ = data
+        x, _, _ = data
         x_i = x_i.float()
         x_j = x_j.float()
         x_i = x_i.cuda(non_blocking=True)

@@ -25,12 +25,22 @@ from utils.validate import validate
 
 
 class BaseTrainer:
-    def __init__(self, experiment_name, model, criterion, train_loader, val_loader, cfg):
+    def __init__(
+        self,
+        experiment_name,
+        model,
+        criterion,
+        train_loader,
+        val_loader,
+        augmentation,
+        cfg,
+    ):
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.criterion = criterion
         self.model = model
+        self.aug = augmentation
         self.optimizer = self.init_optimizer(cfg)
         self.scheduler = self.init_scheduler(cfg)
         self.best_acc = -1
@@ -280,15 +290,15 @@ class BaseTrainer:
 
         # train_meters["data_time"].update(time.time() - train_start_time)
         if self.cfg.MODEL.ARGS.SIAMESE:
-            _, _, x_i, x_j, _ = data
-            x_i = x_i.float()
-            x_j = x_j.float()
-            x_i = x_i.cuda(non_blocking=True)
-            x_j = x_j.cuda(non_blocking=True)
-            batch_size = x_i.size(0)
+            x, _, _ = data
+            x = x.float().cuda()
+
+            batch_size = x.size(0)
+
+            aug_1, aug_2 = self.aug(x)
 
             # forward
-            _, _, z_i, z_j = self.model(x_i, x_j)
+            _, _, z_i, z_j = self.model(aug_1, aug_2)
             loss = self.criterion(z_i, z_j)
             loss = loss.mean()
             # print(loss)

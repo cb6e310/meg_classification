@@ -16,6 +16,7 @@ from utils.helpers import (
     setup_benchmark,
 )
 from utils.dataset import get_data_loader_from_dataset
+from utils.augmentations import AutoAUG
 
 from trainers import trainer_dict
 from models import model_dict, criterion_dict
@@ -75,13 +76,15 @@ if __name__ == "__main__":
         )
         val_loader = None
 
+        aug = AutoAUG().cuda()
+
         model = model_dict[cfg.MODEL.TYPE][0](cfg).cuda()
 
         criterion = criterion_dict[cfg.MODEL.CRITERION.TYPE](cfg).cuda()
 
         # train
         trainer = trainer_dict[cfg.SOLVER.TRAINER](
-            experiment_name, model, criterion, train_loader, val_loader, cfg
+            experiment_name, model, criterion, train_loader, val_loader, aug, cfg
         )
         best_acc = trainer.train()
         best_acc_l.append(float(best_acc))
