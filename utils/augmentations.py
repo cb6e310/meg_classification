@@ -4,7 +4,7 @@ import torch
 from scipy.interpolate import CubicSpline
 import random
 
-from augclass import *
+from utils.augclass import *
 from torch.nn.modules.module import Module
 from torch.nn.parameter import Parameter
 

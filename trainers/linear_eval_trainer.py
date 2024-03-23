@@ -188,7 +188,7 @@ class LinearEvalTrainer:
         feature_vector = []
         labels_vector = []
         for step, data in enumerate(loader):
-            x, y, _, _, _ = data
+            x, y, _ = data
             x = x.cuda(non_blocking=True)
             x = x.float()
             # get encoding

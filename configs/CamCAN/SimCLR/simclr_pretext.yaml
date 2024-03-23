@@ -2,7 +2,7 @@ EXPERIMENT:
   NAME: "simclr_with_NTXent"
   TAG: "baselines"
   PROJECT: "baseline project"
-  DEBUG: False 
+  DEBUG: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training

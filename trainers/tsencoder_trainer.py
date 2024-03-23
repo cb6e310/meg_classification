@@ -4,6 +4,7 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
 from collections import OrderedDict
 import getpass
 from utils.helpers import (
@@ -25,12 +26,13 @@ from utils.validate import validate
 
 
 class TSEncoderTrainer:
-    def __init__(self, experiment_name, model, criterion, train_loader, val_loader, cfg):
+    def __init__(self, experiment_name, model, criterion, train_loader, val_loader, augmentation, cfg):
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.criterion = criterion
         self.model = model
+        self.aug = augmentation
         self.optimizer = self.init_optimizer(cfg)
         self.scheduler = self.init_scheduler(cfg)
         self.best_acc = -1
@@ -279,31 +281,27 @@ class TSEncoderTrainer:
         train_start_time = time.time()
 
         # train_meters["data_time"].update(time.time() - train_start_time)
-        if self.cfg.MODEL.ARGS.SIAMESE:
-            _, _, x_i, x_j, _ = data
-            x_i = x_i.float()
-            x_j = x_j.float()
-            x_i = x_i.cuda()
-            x_j = x_j.cuda()
-            batch_size = x_i.size(0)
+        x = data[0]
+        x = x.float().cuda()
+        if (
+            self.cfg.MODEL.ARGS.MAX_TRAIN_LENGTH is not None
+            and x.size(1) > self.cfg.MODEL.ARGS.MAX_TRAIN_LENGTH
+        ):
+            window_offset = np.random.randint(
+                x.size(1) - self.cfg.MODEL.ARGS.MAX_TRAIN_LENGTH + 1
+            )
+            x = x[:, window_offset : window_offset + self.cfg.MODEL.ARGS.MAX_TRAIN_LENGTH]
+        
+        batch_size = x.size(0)
 
-            # forward
-            # _, _, z_i, z_j = self.model(x_i, x_j)
-            z_i = self.model(x_i, x_i)
-            z_j = self.model(x_j, x_j)
-            loss = self.criterion(z_i, z_j)
-            loss = loss.mean()
-            # print(loss)
-        else:
-            data, target = data
-            data = data.float()
-            data = data.cuda(non_blocking=True)
-            target = target.cuda(non_blocking=True)
-            batch_size = data.size(0)
+        aug_1, aug_2 = self.aug(x)
 
-            # forward
-            preds, loss = self.model(data, target)
-            loss = loss.mean()
+        # forward
+        z_1 = self.model(aug_1)
+        z_2 = self.model(aug_2)
+        loss = self.criterion(z_1, z_2)
+        loss = loss.mean()
+
 
         # backward
         loss.backward()
@@ -311,24 +309,12 @@ class TSEncoderTrainer:
 
         train_meters["training_time"].update(time.time() - train_start_time)
         train_meters["losses"].update(loss.cpu().detach().numpy().mean(), batch_size)
-        if not self.cfg.EXPERIMENT.TASK == "pretext":
-            acc1, _ = accuracy(preds, target, topk=(1, 2))
-            train_meters["top1"].update(acc1[0], batch_size)
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}|lr:{:.6f}".format(
-                epoch,
-                # train_meters["data_time"].avg,
-                train_meters["training_time"].avg,
-                train_meters["losses"].avg,
-                train_meters["top1"].avg,
-                self.optimizer.param_groups[0]["lr"],
-            )
         # print info
-        else:
-            msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|lr:{:.6f}".format(
-                epoch,
-                # train_meters["data_time"].avg,
-                train_meters["training_time"].avg,
-                train_meters["losses"].avg,
-                self.optimizer.param_groups[0]["lr"],
-            )
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|lr:{:.6f}".format(
+            epoch,
+            # train_meters["data_time"].avg,
+            train_meters["training_time"].avg,
+            train_meters["losses"].avg,
+            self.optimizer.param_groups[0]["lr"],
+        )
         return msg

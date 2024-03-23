@@ -46,7 +46,7 @@ class TSEncoder(nn.Module):
         self.repr_dropout = nn.Dropout(p=0.1)
 
     def forward(
-        self, x, _, mask=None, return_embedding=True, return_projection=False
+        self, x, mask=None, return_embedding=True, return_projection=False
     ):  # x: B x T x input_dims
         x = x.transpose(1, 2).squeeze()
         nan_mask = ~x.isnan().any(axis=-1)

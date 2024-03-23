@@ -1,8 +1,8 @@
 EXPERIMENT:
-  NAME: "tse_pretext"
+  NAME: "byol_pretext"
   TAG: "baselines"
   PROJECT: "debug project"
-  DEBUG: True 
+  DEBUG: True
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training
@@ -17,23 +17,23 @@ DATASET:
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "TSEncoder"
+  TYPE: "BYOL"
   ARGS:
+    BACKBONE: "resnet50"
     SIAMESE: True
-    TEMPERATURE: 0.5
-    PROJECTION_DIM: 512
-    DEPTH: 10
-    HIDDEN_SIZE: 64
-    MASK_MODE: "binomial"
-    MAX_TRAIN_LENGTH: 3000
+    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    PROJECTION_DIM: 256
+    PROJECTION_HIDDEN_SIZE: 4096
+    TAU_BASE: 0.996
+    # SOURCE_CHANNELS: 36
   CRITERION:
-    TYPE: "InfoNCE"
+    TYPE: "RegressionLoss"
       # SOURCE_CHANNELS: 36
 SOLVER:
-  TRAINER: "TSEncoder"
-  BATCH_SIZE: 128
+  TRAINER: "BYOL"
+  BATCH_SIZE: 512
   EPOCHS: 400
-  LR: 0.001
+  LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99

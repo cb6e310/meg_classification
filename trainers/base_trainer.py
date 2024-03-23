@@ -292,7 +292,7 @@ class BaseTrainer:
         if self.cfg.MODEL.ARGS.SIAMESE:
             x, _, _ = data
             x = x.float().cuda()
-
+            
             batch_size = x.size(0)
 
             aug_1, aug_2 = self.aug(x)

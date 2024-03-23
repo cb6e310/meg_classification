@@ -7,7 +7,6 @@ from loguru import logger
 
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset, TensorDataset
-from .augmentations import DataTransform
 
 from utils.helpers import (
     centerize_vary_length_series,
@@ -50,7 +49,7 @@ class SimpleDataset(Dataset):
 
     def __getitem__(self, index):
         return (
-            self.x_data[index],
+            self.x_data[index].squeeze(),
             self.y_data[index],
             index,
         )
@@ -187,7 +186,7 @@ def get_data_loader_from_dataset(
 
         if siamese:
             dataset = SimpleDataset(data, labels)
-        elif cfg.MODEL.TYPE == "TS2Vec":
+        elif cfg.MODEL.TYPE == "TS2Vec" or "TSEncoder":
             dataset = TS2Vec_Train_Dataset(data, cfg)
         else:
             dataset = torch.utils.data.TensorDataset(
