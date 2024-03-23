@@ -1,0 +1,42 @@
+EXPERIMENT:
+  NAME: "simsiam_linear_eval"
+  TAG: "baselines"
+  PROJECT: "debug project"
+  DEBUG: True 
+  REPETITION_NUM: 5 # Number of repetition times
+  TASK: "train"
+  RESUME : False  # Resume training
+  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+DATASET:
+  ROOT: "/home/song/datasets/timeseries/"
+  TYPE: "HAR"
+  CHANNELS: 9
+  POINTS: 128
+  NUM_CLASSES: 6
+  TEST:
+    BATCH_SIZE: 128
+MODEL:
+  TYPE: "SimSiam"
+  ARGS:
+    BACKBONE: "resnet50"
+    TEMPERATURE: 0.5
+    SIAMESE: True
+    N_FEATURES: 2048 # backbone output feature dimension
+    PROJECTION_DIM: 256
+    USE_MOMENTUM: False # True for BYOL, False for SimSiam
+    PROJECTION_HIDDEN_SIZE: 4096
+    TAU_BASE: 0.996
+    CLASSIFIER: "LinearClassifier"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simsiam_pretext_2024-01-19_11-10-49/checkpoints/epoch_399_0_chkp.tar"
+    # SOURCE_CHANNELS: 36
+  CRITERION:
+    TYPE: "CE"
+SOLVER:
+  BATCH_SIZE: 512
+  EPOCHS: 400
+  LR: 0.5
+  SCHEDULER:
+    TYPE: "ExponentialLR"
+    GAMMA: 0.99
+    MIN_LR: 0.001

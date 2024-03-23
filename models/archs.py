@@ -213,7 +213,6 @@ class BYOL(nn.Module):
         # sync_batchnorm=None,
     ):
         super().__init__()
-        self.net = backbone_dict[cfg.MODEL.ARGS.BACKBONE][0](pretrained=False)
         feature_size = cfg.DATASET.POINTS
         channels = cfg.DATASET.CHANNELS
         hidden_layer = -2
@@ -222,10 +221,14 @@ class BYOL(nn.Module):
         moving_average_decay = cfg.MODEL.ARGS.TAU_BASE
         use_momentum = cfg.MODEL.ARGS.USE_MOMENTUM
         sync_batchnorm = None
+        if "resnet" in cfg.MODEL.ARGS.BACKBONE:
 
-        self.net.conv1 = nn.Conv2d(
-            channels, 64, kernel_size=3, stride=1, padding=1, bias=False
-        )
+            self.net = backbone_dict[cfg.MODEL.ARGS.BACKBONE][0](pretrained=False)
+            self.net.conv1 = nn.Conv2d(
+                channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+            )
+        elif "varcnn" in cfg.MODEL.ARGS.BACKBONE:
+            self.net = backbone_dict[cfg.MODEL.ARGS.BACKBONE][0](cfg)
 
         self.online_encoder = NetWrapper(
             self.net,

@@ -31,13 +31,15 @@ from utils.validate import validate
 
 
 class BYOLTrainer:
-    def __init__(self, experiment_name, model, criterion, train_loader, val_loader, cfg):
+    def __init__(
+        self, experiment_name, model, criterion, train_loader, val_loader, aug, cfg
+    ):
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.criterion = criterion
         self.model = model
-
+        self.aug = aug
         self.tau_base = cfg.MODEL.ARGS.TAU_BASE
 
         # check model name is BYOL
@@ -285,15 +287,13 @@ class BYOLTrainer:
 
         # train_meters["data_time"].update(time.time() - train_start_time)
         x, _, _ = data
-        x_i = x_i.float()
-        x_j = x_j.float()
-        x_i = x_i.cuda(non_blocking=True)
-        x_j = x_j.cuda(non_blocking=True)
-        batch_size = x_i.size(0)
+        x = x.float().cuda()
+        batch_size = x.size(0)
+        aug_1, aug_2 = self.aug(x)
 
         # forward
         online_pred_one, online_pred_two, target_proj_one, target_proj_two = self.model(
-            x_i, x_j
+            aug_1, aug_2
         )
         loss = self.criterion(online_pred_one, target_proj_two) + self.criterion(
             online_pred_two, target_proj_one
