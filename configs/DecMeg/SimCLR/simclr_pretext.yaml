@@ -1,8 +1,8 @@
 EXPERIMENT:
   NAME: "simclr_with_NTXent"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True
+  PROJECT: "baseline project"
+  DEBUG: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME: False # Resume training
@@ -23,7 +23,7 @@ MODEL:
     TEMPERATURE: 0.5
     SIAMESE: True
     PROJECTION_DIM: 128
-    MAX_POOL: 
+    N_FEATURES: 4500
     # SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "NT_Xent"

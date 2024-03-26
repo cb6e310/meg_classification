@@ -537,6 +537,7 @@ class SimCLR(BaseNet):
 
         backbone_name = cfg.MODEL.ARGS.BACKBONE
         projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+        n_features = cfg.MODEL.ARGS.N_FEATURES
 
         if "resnet" in backbone_name:
             self.backbone = backbone_dict[backbone_name][0](pretrained=False)
@@ -552,7 +553,7 @@ class SimCLR(BaseNet):
         elif "varcnn" in backbone_name:
             self.backbone = backbone_dict[backbone_name][0](cfg)
             self.projection_head = nn.Sequential(
-                nn.Linear(backbone_dict[backbone_name][1], projection_dim),
+                nn.Linear(n_features, projection_dim),
             )
         print(self.backbone)
 
