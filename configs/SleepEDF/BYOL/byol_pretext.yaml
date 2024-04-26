@@ -1,41 +1,42 @@
 EXPERIMENT:
-  NAME: "simclr_with_NTXent"
+  NAME: "byol_pretext"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True 
+  PROJECT: "baseline project"
+  DEBUG: True
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
 DATASET:
-  ROOT: "/home/song/datasets/timeseries/"
-  TYPE: "HAR"
-  CHANNELS: 9
-  POINTS: 128 
-  NUM_CLASSES: 6
+  ROOT: "/home/song/datasets/EEG/sleepedfx"
+  TYPE: "st"
+  CHANNELS: 2
+  POINTS: 3000
+  NUM_CLASSES: 5
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "SimCLR"
+  TYPE: "BYOL"
   ARGS:
-    BACKBONE: "resnet50"
-    TEMPERATURE: 0.5
+    BACKBONE: "resnet18"
     SIAMESE: True
-    PROJECTION_DIM: 128
-    N_FEATURES: 2048
+    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    FIRST_CHANNEL: 8
+    PROJECTION_DIM: 512
+    PROJECTION_HIDDEN_SIZE: 2048
+    TAU_BASE: 0.996
     # SOURCE_CHANNELS: 36
   CRITERION:
-    TYPE: "NT_Xent"
-    ARGS:
-      TEMPERATURE: 0.5
+    TYPE: "RegressionLoss"
       # SOURCE_CHANNELS: 36
 SOLVER:
-  BATCH_SIZE: 512
+  TRAINER: "BYOL"
+  BATCH_SIZE: 500
   EPOCHS: 300
-  LR: 0.05
+  LR: 0.005
   SCHEDULER:
     TYPE: "ExponentialLR"
-    GAMMA: 0.99
+    GAMMA: 0.9
     MIN_LR: 0.0001
 

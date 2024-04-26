@@ -189,9 +189,12 @@ class LinearEvalTrainer:
         labels_vector = []
         for step, data in enumerate(loader):
             x, y, _ = data
+
             x = x.cuda(non_blocking=True)
             x = x.float()
             # get encoding
+            if self.cfg.MODEL.TYPE == "BYOL":
+                x = torch.unsqueeze(x, -1)
             with torch.no_grad():
                 h = self.model(x, x, return_embedding=True, return_projection=False)
 
@@ -353,7 +356,7 @@ class LinearEvalTrainer:
         train_meters["losses"].update(loss.cpu().detach().numpy().mean(), batch_size)
         acc1, _ = accuracy(preds, target, topk=(1, 2))
         train_meters["top1"].update(acc1[0], batch_size)
-        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|Top-1:{:.2f}|lr:{:.6f}".format(
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.6f}|Top-1:{:.6f}|lr:{:.6f}".format(
             epoch,
             train_meters["training_time"].avg,
             train_meters["losses"].avg,

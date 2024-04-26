@@ -25,7 +25,7 @@ MODEL:
     N_FEATURES: 2048 # backbone output feature dimension
     PROJECTION_DIM: 128
     CLASSIFIER: "LinearClassifier"
-    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/debug project/simclr_with_NTXent_2024-04-24_07-45-00/checkpoints/epoch_99_0_chkp.tar"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_with_NTXent_2024-03-22_02-49-42/checkpoints/epoch_49_0_chkp.tar"
 
     # SOURCE_CHANNELS: 36
   CRITERION:

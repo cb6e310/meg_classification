@@ -25,7 +25,7 @@ class AutoAUG(Module):
             scaling(),
             time_warp(),
             window_slice(),
-            window_warp(),
+            # window_warp(),
         ]
 
         if used_augs is not None:

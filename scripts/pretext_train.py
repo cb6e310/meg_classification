@@ -80,6 +80,8 @@ if __name__ == "__main__":
 
         model = model_dict[cfg.MODEL.TYPE][0](cfg).cuda()
 
+        # model = nn.DataParallel(model)
+
         criterion = criterion_dict[cfg.MODEL.CRITERION.TYPE](cfg).cuda()
 
         # train

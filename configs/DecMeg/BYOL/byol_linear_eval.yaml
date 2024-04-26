@@ -1,8 +1,8 @@
 EXPERIMENT:
-  NAME: "simclr_linear_eval"
+  NAME: "byol_linear_eval"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True 
+  PROJECT: "baseline project"
+  DEBUG: True
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "train"
   RESUME : False  # Resume training
@@ -17,22 +17,25 @@ DATASET:
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "SimCLR"
+  TYPE: "BYOL"
   ARGS:
     BACKBONE: "varcnn"
-    TEMPERATURE: 0.5
     SIAMESE: True
-    N_FEATURES:  4500 # backbone output feature dimension
-    PROJECTION_DIM: 128
+    N_FEATURES: 45000 # backbone output feature dimension
+    PROJECTION_DIM: 512
+    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    PROJECTION_HIDDEN_SIZE: 4096
+    TAU_BASE: 0.996
     CLASSIFIER: "LinearClassifier"
-    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_with_NTXent_2024-03-27_01-54-25/checkpoints/epoch_299_0_chkp.tar"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/debug project/byol_pretext_2024-03-27_13-40-53/checkpoints/epoch_99_0_chkp.tar"
+
     # SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "CE"
 SOLVER:
   BATCH_SIZE: 512
-  EPOCHS: 400
-  LR: 0.05
+  EPOCHS: 100
+  LR: 0.5
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
