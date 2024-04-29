@@ -289,9 +289,9 @@ class BYOLTrainer:
         x, _, _ = data
         x = x.float().cuda()
         batch_size = x.size(0)
+        x = torch.squeeze(x, -1)
+        x = x.transpose(1, 2)
         aug_1, aug_2 = self.aug(x)
-        aug_1 = torch.unsqueeze(aug_1, -1)
-        aug_2 = torch.unsqueeze(aug_2, -1)
 
         # forward
         online_pred_one, online_pred_two, target_proj_one, target_proj_two = self.model(

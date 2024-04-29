@@ -9,9 +9,9 @@ EXPERIMENT:
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
 DATASET:
-  ROOT: "/home/song/datasets/EEG/sleepedfx"
-  TYPE: "st"
-  CHANNELS: 2
+  ROOT: "/home/song/datasets/EEG"
+  TYPE: "sleepedf20"
+  CHANNELS: 1
   POINTS: 3000
   NUM_CLASSES: 5
   TEST:
