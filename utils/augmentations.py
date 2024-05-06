@@ -59,6 +59,9 @@ class AutoAUG(Module):
         torch.nn.init.normal_(self.weight, mean=0.0, std=0.01)
 
     def forward(self, x):
+        # x shape: (batch, seq_len, channels)
+        x=x.transpose(1,2)
+
         if self.aug_p1 == 0 and self.aug_p2 == 0:
             return x.clone(), x.clone()
         para = self.get_sampling()
@@ -81,5 +84,7 @@ class AutoAUG(Module):
             aug1 = torch.sum(aug1, 0)
 
         aug2 = x.clone()
+        aug1 = aug1.transpose(1,2)
+        aug2 = aug2.transpose(1,2)
 
         return aug1, aug2

@@ -66,8 +66,8 @@ class magnitude_warp:
 
     def __call__(self, x_torch):
         x = x_torch.cpu().detach().numpy()
-        x_t = np.transpose(x, (0, 2, 1))
-        x_tran = self.transform.augment(x_t).transpose((0, 2, 1))
+        # x_t = np.transpose(x, (0, 2, 1))
+        x_tran = self.transform.augment(x)
         return totensor(x_tran.astype(np.float32))
 
 
@@ -79,7 +79,7 @@ class window_slice:
     def __call__(self, x):
 
         # begin = time.time()
-        x = torch.transpose(x, 2, 1)
+        # x = torch.transpose(x, 2, 1)
 
         target_len = np.ceil(self.reduce_ratio * x.shape[2]).astype(int)
         if target_len >= x.shape[2]:
@@ -112,46 +112,73 @@ class window_warp:
         self.window_ratio = window_ratio
         self.scales = scales
 
-    def __call__(self, x_torch):
-
-        begin = time.time()
-        B, T, D = x_torch.size()
-        x = torch.transpose(x_torch, 2, 1)
+    def __call__(self, x):
         # https://halshs.archives-ouvertes.fr/halshs-01357973/document
-        warp_scales = np.random.choice(self.scales, B)
-        warp_size = np.ceil(self.window_ratio * T).astype(int)
+        x = x.cpu().detach().numpy()
+        warp_scales = np.random.choice(self.scales, x.shape[0])
+        warp_size = np.ceil(self.window_ratio * x.shape[1]).astype(int)
         window_steps = np.arange(warp_size)
 
-        window_starts = np.random.randint(low=1, high=T - warp_size - 1, size=(B)).astype(
-            int
-        )
+        window_starts = np.random.randint(
+            low=1, high=x.shape[1] - warp_size - 1, size=(x.shape[0])
+        ).astype(int)
         window_ends = (window_starts + warp_size).astype(int)
 
-        rets = []
+        ret = np.zeros_like(x)
+        for i, pat in enumerate(x):
+            for dim in range(x.shape[2]):
+                start_seg = pat[: window_starts[i], dim]
+                window_seg = np.interp(
+                    np.linspace(0, warp_size - 1, num=int(warp_size * warp_scales[i])),
+                    window_steps,
+                    pat[window_starts[i] : window_ends[i], dim],
+                )
+                end_seg = pat[window_ends[i] :, dim]
+                warped = np.concatenate((start_seg, window_seg, end_seg))
+                ret[i, :, dim] = np.interp(
+                    np.arange(x.shape[1]),
+                    np.linspace(0, x.shape[1] - 1.0, num=warped.size),
+                    warped,
+                ).T
+                
+        return torch.from_numpy(ret).type(torch.FloatTensor).cuda()
+        # begin = time.time()
+        # B, T, D = x_torch.size()
+        # x = x_torch
+        # # https://halshs.archives-ouvertes.fr/halshs-01357973/document
+        # warp_scales = np.random.choice(self.scales, B)
+        # warp_size = np.ceil(self.window_ratio * T).astype(int)
+        # window_steps = np.arange(warp_size)
 
-        for i in range(x.shape[0]):
-            window_seg = torch.unsqueeze(x[i, :, window_starts[i] : window_ends[i]], 0)
-            window_seg_inter = interpolate(
-                window_seg,
-                int(warp_size * warp_scales[i]),
-                mode="linear",
-                align_corners=False,
-            )[0]
-            start_seg = x[i, :, : window_starts[i]]
-            end_seg = x[i, :, window_ends[i] :]
-            ret_i = torch.cat([start_seg, window_seg_inter, end_seg], -1)
-            ret_i_inter = interpolate(
-                torch.unsqueeze(ret_i, 0), T, mode="linear", align_corners=False
-            )
-            rets.append(ret_i_inter)
+        # window_starts = np.random.randint(low=1, high=T - warp_size - 1, size=(B)).astype(
+        #     int
+        # )
+        # window_ends = (window_starts + warp_size).astype(int)
 
-        ret = torch.cat(rets, 0)
-        ret = torch.transpose(ret, 2, 1)
-        # end = time.time()
-        # old_window_warp()(x_torch)
-        # end2 = time.time()
-        # print(end-begin,end2-end)
-        return ret
+        # rets = []
+
+        # for i in range(x.shape[0]):
+        #     window_seg = torch.unsqueeze(x[i, window_starts[i] : window_ends[i], :], 0)
+        #     window_seg_inter = interpolate(
+        #         window_seg,
+        #         int(warp_size * warp_scales[i]),
+        #         mode="linear",
+        #         align_corners=False,
+        #     )[0]
+        #     start_seg = x[i, : window_starts[i], :]
+        #     end_seg = x[i, window_ends[i] :, :]
+        #     ret_i = torch.cat([start_seg, window_seg_inter, end_seg], -1)
+        #     ret_i_inter = interpolate(
+        #         torch.unsqueeze(ret_i, 0), T, mode="linear", align_corners=False
+        #     )
+        #     rets.append(ret_i_inter)
+
+        # ret = torch.cat(rets, 0)
+        # # end = time.time()
+        # # old_window_warp()(x_torch)
+        # # end2 = time.time()
+        # # print(end-begin,end2-end)
+        # return ret
 
 
 class subsequence:

@@ -193,8 +193,8 @@ class LinearEvalTrainer:
             x = x.cuda(non_blocking=True)
             x = x.float()
             # get encoding
-            if self.cfg.MODEL.TYPE == "BYOL":
-                x = torch.unsqueeze(x, -1)
+            # if self.cfg.MODEL.TYPE == "BYOL":
+            #     x = torch.unsqueeze(x, -1)
             with torch.no_grad():
                 h = self.model(x, x, return_embedding=True, return_projection=False)
 

@@ -308,10 +308,10 @@ class BYOL(nn.Module):
 
         online_projections, _ = self.online_encoder(views)
 
-        # logger.debug(online_projections.shape)
+        logger.debug(online_projections.shape)
 
         online_predictions = self.online_predictor(online_projections)
-        # logger.debug(online_predictions.shape)
+        logger.debug(online_predictions.shape)
 
         online_pred_one, online_pred_two = online_predictions.chunk(2, dim=0)
 
@@ -483,76 +483,6 @@ class LFCNN(BaseNet):
         x = torch.squeeze(x)
         return self.net(x)
 
-
-class TimeNet(BaseNet):
-    def __init__(self, cfg):
-        super().__init__(cfg)
-        meg_channels = cfg.DATASET.CHANNELS
-        points_length = cfg.DATASET.POINTS
-        num_classes = cfg.DATASET.NUM_CLASSES
-
-        max_pool = cfg.MODEL.ARGS.MAX_POOL
-        channel_1 = cfg.MODEL.ARGS.CHANNEL_1
-        channel_2 = cfg.MODEL.ARGS.CHANNEL_2
-        kernel_size_1 = cfg.MODEL.ARGS.KERNEL_SIZE_1
-        kernel_size_2 = cfg.MODEL.ARGS.KERNEL_SIZE_2
-        dropout = cfg.MODEL.ARGS.DROP_OUT
-        batch_norm_flag = cfg.MODEL.ARGS.BATCH_NORM_FLAG
-
-        # sources_channels = cfg.MODEL.ARGS.SOURCE_CHANNELS
-
-        batch_size = cfg.SOLVER.BATCH_SIZE
-
-        self.net = nn.Sequential(
-            OrderedDict(
-                [
-                    (
-                        "conv1d-1",
-                        nn.Conv1d(
-                            meg_channels,
-                            channel_1,
-                            kernel_size=kernel_size_1,
-                            stride=1,
-                            padding=kernel_size_1 // 2,
-                            bias=False,
-                        ),
-                    ),
-                    (
-                        "bn1",
-                        nn.BatchNorm1d(channel_1) if batch_norm_flag else nn.Identity(),
-                    ),
-                    ("relu1", nn.ReLU(inplace=True)),
-                    (
-                        "conv1d-2",
-                        nn.Conv1d(
-                            channel_1,
-                            channel_2,
-                            kernel_size=kernel_size_2,
-                            stride=1,
-                            padding=kernel_size_2 // 2,
-                            bias=False,
-                        ),
-                    ),
-                    (
-                        "bn2",
-                        nn.BatchNorm1d(channel_2) if batch_norm_flag else nn.Identity(),
-                    ),
-                    ("relu2", nn.ReLU(inplace=True)),
-                    ("maxpool", nn.MaxPool1d(max_pool)),
-                    ("dropout", nn.Dropout(p=dropout)),
-                    ("flatten", TensorView()),
-                    (
-                        "linear",
-                        nn.Linear(channel_2 * int(points_length / 2), num_classes),
-                    ),
-                ]
-            )
-        )
-
-    def forward(self, x, target=None):
-        out = self.net(x)
-        loss = self.compute_loss(out, target)
-        return out, loss
 
 
 class SimCLR(BaseNet):
