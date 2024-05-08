@@ -44,6 +44,14 @@ class scaling:
         res = torch.multiply(x, torch.unsqueeze(factor, 1))
         return res
 
+class timeshift:
+    def __init__(self, shift_max=10):
+        self.shift_max = shift_max
+
+    def __call__(self, x):
+        shift = np.random.randint(-self.shift_max, self.shift_max)
+        return torch.roll(x, shifts=shift, dims=1)
+
 
 class time_warp:
     def __init__(self, n_speed_change=100, max_speed_ratio=10) -> None:

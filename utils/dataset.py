@@ -13,8 +13,7 @@ from utils.helpers import (
     split_with_nan,
 )
 
-class ConsistencyDataset(Dataset):
-    pass
+
 
 class SimpleDataset(Dataset):
     # Initialize your data, download, etc.
@@ -131,6 +130,8 @@ def get_data_loader_from_dataset(
             dataset = SimpleDataset(data, labels)
         elif cfg.MODEL.TYPE == "TS2Vec" or "TSEncoder":
             dataset = TS2Vec_Train_Dataset(data, cfg)
+        elif cfg.MODEL.TYPE == "Consistency":
+            pass
         else:
             dataset = torch.utils.data.TensorDataset(
                 torch.from_numpy(data), torch.from_numpy(labels)

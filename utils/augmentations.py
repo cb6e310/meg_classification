@@ -7,84 +7,82 @@ import random
 from utils.augclass import *
 from torch.nn.modules.module import Module
 from torch.nn.parameter import Parameter
+from torchvision.transforms import Compose
 
 from loguru import logger
 
 
 class AutoAUG(Module):
-    def __init__(
-        self, aug_p1=0.2, aug_p2=0.0, used_augs=None, device=None, dtype=None
+    def __init__(self,cfg
     ) -> None:
         super(AutoAUG, self).__init__()
-        factory_kwargs = {"device": device, "dtype": dtype}
-
-        all_augs = [
-            subsequence(),
+        self.cfg = cfg
+        self.all_augs = [
+            # subsequence(),
+            timeshift(),
             cutout(),
             jitter(),
             scaling(),
-            time_warp(),
-            window_slice(),
             window_warp(),
         ]
 
-        if used_augs is not None:
-            self.augs = []
-            for i in range(len(used_augs)):
-                if used_augs[i]:
-                    self.augs.append(all_augs[i])
-        else:
-            self.augs = all_augs
-        self.weight = Parameter(torch.empty((2, len(self.augs)), **factory_kwargs))
-        self.reset_parameters()
-        self.aug_p1 = aug_p1
-        self.aug_p2 = aug_p2
+        self.normal_augs_wo_spec = [
+            timeshift(),
+            scaling(),
+            window_warp(),
+        ]
 
-    def get_sampling(self, temperature=1.0, bias=0.0):
-        if self.training:
-            bias = bias + 0.0001  # If bias is 0, we run into problems
-            eps = (bias - (1 - bias)) * torch.rand(self.weight.size()) + (1 - bias)
-            gate_inputs = torch.log(eps) - torch.log(1 - eps)
-            gate_inputs = gate_inputs.cuda()
-            gate_inputs = (gate_inputs + self.weight) / temperature
-            # para = torch.sigmoid(gate_inputs)
-            para = torch.softmax(gate_inputs, -1)
-            return para
-        else:
-            logger.debug("yep")
-            return torch.softmax(self.weight, -1)
 
-    def reset_parameters(self) -> None:
-        # init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        torch.nn.init.normal_(self.weight, mean=0.0, std=0.01)
 
-    def forward(self, x):
+
+    def forward(self, x, step=None):
         # x shape: (batch, seq_len, channels)
         x=x.transpose(1,2)
 
-        if self.aug_p1 == 0 and self.aug_p2 == 0:
-            return x.clone(), x.clone()
-        para = self.get_sampling()
+        if self.training and step is None:
+            raise ValueError("step is required during training")
+        
+        if step == "clr":
+            transform = Compose(self.normal_augs_wo_spec)
+            aug1 = transform(x)
+            aug2 = transform(x)
+            aug1 = aug1.transpose(1,2)
+            aug2 = aug2.transpose(1,2)
+            return aug1, aug2
+        elif step == "rec":
+            spec_transform = Compose([jitter(), cutout()])
+            transform = Compose([scaling()])
+            aug = spec_transform(x)
+            aug1 = transform(aug)
+            aug2 = transform(x)
+            aug1 = aug1.transpose(1,2)
+            aug2 = aug2.transpose(1,2)
 
-        if random.random() > self.aug_p1 and self.training:
-            aug1 = x.clone()
+            return aug1, aug2
+        
+        elif step == "cls":
+            # 1/3 for jitter and 1/3 for cutout and 1/3 for no spec
+            transform = Compose(self.normal_augs_wo_spec)
+            spec_transform_jitter = Compose([jitter()])
+            spec_transform_cutout = Compose([cutout()])
+
+            batch_size = x.size(0)
+            labels = torch.zeros(batch_size, dtype=torch.long)
+            indices = torch.randperm(batch_size)  
+
+            third_batch = batch_size // 3
+
+            noise_indices = indices[:third_batch]
+            x[noise_indices] = spec_transform_jitter(x[noise_indices])
+            labels[noise_indices] = 1  
+
+            cutout_indices = indices[third_batch:2*third_batch]
+            x[cutout_indices] = spec_transform_cutout(x[cutout_indices])
+            labels[cutout_indices] = 2  
+
+            aug1 = transform(x)
+            aug1 = aug1.transpose(1,2)
+            return aug1, labels
+        
         else:
-            xs1_list = []
-            for aug in self.augs:
-                xs1_list.append(aug(x))
-            xs1 = torch.stack(xs1_list, 0)
-            # logger.debug(xs1.shape)
-            xs1_flattern = torch.reshape(
-                xs1, (xs1.shape[0], xs1.shape[1] * xs1.shape[2] * xs1.shape[3])
-            )
-            # logger.debug(xs1_flattern.shape)
-            # logger.debug(para[0])
-            # logger.debug("--")
-            aug1 = torch.reshape(torch.unsqueeze(para[0], -1) * xs1_flattern, xs1.shape)
-            aug1 = torch.sum(aug1, 0)
-
-        aug2 = x.clone()
-        aug1 = aug1.transpose(1,2)
-        aug2 = aug2.transpose(1,2)
-
-        return aug1, aug2
+            raise ValueError("step should be one of 'clr', 'rec', 'cls'")
