@@ -591,6 +591,8 @@ class CurrentCLR(BaseNet):
             projection_size, projection_size, projection_hidden_size, simple=simple
         )
 
+        # self.
+
         # get device of network and make wrapper same device
         device = get_module_device(self.net)
         self.to(device)
@@ -669,5 +671,6 @@ class CurrentCLR(BaseNet):
 
         elif step == "rec":
             pass
+
         elif step == "cls":
             pass

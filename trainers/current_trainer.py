@@ -293,65 +293,57 @@ class BYOLTrainer:
                 torch.save(state, chkp_path)
 
     def after_warmup_iter(self, data, epoch, train_meters, data_itx: int = 0):
-        self.optimizer.zero_grad()
         train_start_time = time.time()
-
-        # train_meters["data_time"].update(time.time() - train_start_time)
         x, _, _ = data
-        x = x.float().cuda()
         batch_size = x.size(0)
-        x = torch.squeeze(x, -1)
-        aug_1, aug_2 = self.aug(x)
-        aug_1 = aug_1.unsqueeze(-1)
-        aug_2 = aug_2.unsqueeze(-1)
 
-        # forward
-        (
-            inv_online_pred_one,
-            inv_online_pred_two,
-            inv_target_proj_one,
-            inv_target_proj_two,
-            cs_proj_one,
-            cs_proj_two,
-        ) = self.model(aug_1, aug_2)
-        loss_inv = self.inv_criterion(
-            inv_online_pred_one, inv_target_proj_two
-        ) + self.criterion(inv_online_pred_two, inv_target_proj_one)
+        loss_total_rec, loss_rec_spec, loss_rec_normal, loss_orthogonal = self.rec_step(x)
 
-        loss_cs = self.cs_criterion(cs_proj_one, cs_proj_two)
+        loss_clr = self.clr_step(x)
 
-        loss_inv = loss_inv.mean()
-
-        loss_cs = loss_cs.mean()
-
-        loss = loss_inv + self.cfg.MODEL.ARGS.LAMBDA * loss_cs
-
-        # backward
-        self.optimizer.zero_grad()
-        loss_inv.backward()
-        self.optimizer.step()
-
-        if self.model.use_momentum:
-            self.model.update_moving_average()
+        loss_cls = self.cls_step(x)
 
         train_meters["training_time"].update(time.time() - train_start_time)
-        train_meters["losses"].update(loss_inv.cpu().detach().numpy().mean(), batch_size)
-        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.7f}|lr:{:.6f}".format(
+        train_meters["loss_total_rec"].update(
+            loss_total_rec.cpu().detach().numpy().mean(), batch_size
+        )
+        train_meters["loss_rec_spec"].update(
+            loss_rec_spec.cpu().detach().numpy().mean(), batch_size
+        )
+        train_meters["loss_rec_normal"].update(
+            loss_rec_normal.cpu().detach().numpy().mean(), batch_size
+        )
+        train_meters["loss_orthogonal"].update(
+            loss_orthogonal.cpu().detach().numpy().mean(), batch_size
+        )
+        train_meters["loss_clr"].update(
+            loss_clr.cpu().detach().numpy().mean(), batch_size
+        )
+        train_meters["loss_cls"].update(
+            loss_cls.cpu().detach().numpy().mean(), batch_size
+        )
+
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.7f}|loss_rec:{:.7f}|loss_orthogonal:{:.7f}|loss_clr:{:.7f}|loss_cls:{:.7f}|lr:{:.6f}".format(
             epoch,
             # train_meters["data_time"].avg,
             train_meters["training_time"].avg,
-            train_meters["losses"].avg,
+            train_meters["loss_total_rec"].avg,
+            train_meters["loss_rec_spec"].avg,
+            train_meters["loss_rec_normal"].avg,
+            train_meters["loss_orthogonal"].avg,
+            train_meters["loss_clr"].avg,
+            train_meters["loss_cls"].avg,
             self.optimizer.param_groups[0]["lr"],
         )
+
         return msg
 
     def before_warmup_iter(self, data, epoch, train_meters, data_itx: int = 0):
         train_start_time = time.time()
         x, _, _ = data
         batch_size = x.size(0)
-        loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal = self.rec_step(
-            data, epoch, train_meters, data_itx
-        )
+
+        loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal = self.rec_step(x)
 
         train_meters["training_time"].update(time.time() - train_start_time)
         train_meters["losses"].update(
@@ -422,3 +414,58 @@ class BYOLTrainer:
         self.optimizer.step()
 
         return loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal
+
+    def clr_step(self, x):
+        # clr step
+        self.optimizer.zero_grad()
+        x = x.float().cuda()
+        x = torch.squeeze(x, -1)
+        aug_1, aug_2 = self.aug(x, step="clr")
+        aug_1 = aug_1.unsqueeze(-1)
+        aug_2 = aug_2.unsqueeze(-1)
+
+        # forward
+        (
+            clr_online_pred_one,
+            clr_online_pred_two,
+            clr_target_proj_one,
+            clr_target_proj_two,
+        ) = self.model(step="clr", clr_batch_view_one=aug_1, clr_batch_view_two=aug_2)
+
+        loss_clr = self.clr_criterion(
+            clr_online_pred_one, clr_target_proj_two
+        ) + self.clr_criterion(clr_online_pred_two, clr_target_proj_one)
+
+        loss_clr = loss_clr.mean()
+
+        # backward
+        self.optimizer.zero_grad()
+        loss_clr.backward()
+        self.optimizer.step()
+
+        return loss_clr
+
+    def cls_step(self, x):
+        # cls step
+        self.optimizer.zero_grad()
+        x = x.float().cuda()
+        x = torch.squeeze(x, -1)
+        aug, labels = self.aug(x, step="cls")
+        aug = aug.unsqueeze(-1)
+
+        # forward
+        (
+            cls_online_pred,
+            cls_target_proj,
+        ) = self.model(step="cls", cls_batch_view=aug, labels=labels)
+
+        loss_cls = self.cls_criterion(cls_online_pred, labels)
+
+        loss_cls = loss_cls.mean()
+
+        # backward
+        self.optimizer.zero_grad()
+        loss_cls.backward()
+        self.optimizer.step()
+
+        return loss_cls
