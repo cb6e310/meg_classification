@@ -302,8 +302,6 @@ class BYOL(nn.Module):
         if return_embedding:
             return self.online_encoder(batch_view_1, return_projection=return_projection)
 
-        
-
         views = torch.cat((batch_view_1, batch_view_2), dim=0)
 
         online_projections, _ = self.online_encoder(views)
@@ -484,7 +482,6 @@ class LFCNN(BaseNet):
         return self.net(x)
 
 
-
 class SimCLR(BaseNet):
     def __init__(self, cfg):
         super(SimCLR, self).__init__(cfg)
@@ -533,7 +530,6 @@ class SimCLR(BaseNet):
         return h_i, h_j, z_i, z_j
 
 
-
 class LinearClassifier(nn.Module):
     def __init__(self, cfg):
         super(LinearClassifier, self).__init__()
@@ -543,6 +539,7 @@ class LinearClassifier(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
 
 class CurrentCLR(BaseNet):
     def __init__(
@@ -625,35 +622,52 @@ class CurrentCLR(BaseNet):
         )
 
     def forward(
-        self, batch_view_1, batch_view_2, return_embedding=False, return_projection=True
+        self,
+        step,
+        clr_batch_view_1=None,
+        clr_batch_view_2=None,
+        rec_batch_view_spec=None,
+        rec_batch_view_normal=None,
+        cls_batch_view=None,
+        cls_labels=None,
+        return_embedding=False,
+        return_projection=True,
     ):
         # assert not (
         #     self.training and batch_view_1.shape[0] == 1
         # ), "you must have greater than 1 sample when training, due to the batchnorm in the projection layer"
 
-        if return_embedding:
-            return self.online_encoder(batch_view_1, return_projection=return_projection)
+        if step == "clr":
+            if return_embedding:
+                return self.online_encoder(
+                    clr_batch_view_1, return_projection=return_projection
+                )
 
-        views = torch.cat((batch_view_1, batch_view_2), dim=0)
+            views = torch.cat((clr_batch_view_1, clr_batch_view_2), dim=0)
 
-        online_projections, _ = self.online_encoder(views)
-        online_predictions = self.online_predictor(online_projections)
+            online_projections, _ = self.online_encoder(views)
+            online_predictions = self.online_predictor(online_projections)
 
-        online_pred_one, online_pred_two = online_predictions.chunk(2, dim=0)
+            online_pred_one, online_pred_two = online_predictions.chunk(2, dim=0)
 
-        with torch.no_grad():
-            target_encoder = (
-                self._get_target_encoder() if self.use_momentum else self.online_encoder
+            with torch.no_grad():
+                target_encoder = (
+                    self._get_target_encoder() if self.use_momentum else self.online_encoder
+                )
+
+                target_projections, _ = target_encoder(views)
+                target_projections = target_projections.detach()
+
+                target_proj_one, target_proj_two = target_projections.chunk(2, dim=0)
+
+            return (
+                online_pred_one,
+                online_pred_two,
+                target_proj_one,
+                target_proj_two,
             )
 
-            target_projections, _ = target_encoder(views)
-            target_projections = target_projections.detach()
-
-            target_proj_one, target_proj_two = target_projections.chunk(2, dim=0)
-
-        return (
-            online_pred_one,
-            online_pred_two,
-            target_proj_one,
-            target_proj_two,
-        )
+        elif step == "rec":
+            pass
+        elif step == "cls":
+            pass

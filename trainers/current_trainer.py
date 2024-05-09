@@ -213,6 +213,10 @@ class BYOLTrainer:
             "training_time": AverageMeter(),
             # "data_time": AverageMeter(),
             "losses": AverageMeter(),
+            "loss_rec": AverageMeter(),
+            "loss_orthogonal": AverageMeter(),
+            "loss_clr": AverageMeter(),
+            "loss_cls": AverageMeter(),
             "top1": AverageMeter(),
         }
         num_iter = len(self.train_loader)
@@ -220,10 +224,16 @@ class BYOLTrainer:
 
         # train loops
         self.model.train()
-        for idx, data in enumerate(self.train_loader):
-            msg = self.after_warmup_iter(data, epoch, train_meters, idx)
-            pbar.set_description(log_msg(msg, "TRAIN"))
-            pbar.update()
+        if epoch < self.warmup_epochs:
+            for idx, data in enumerate(self.train_loader):
+                msg = self.before_warmup_iter(data, epoch, train_meters, idx)
+                pbar.set_description(log_msg(msg, "TRAIN"))
+                pbar.update()
+        else:
+            for idx, data in enumerate(self.train_loader):
+                msg = self.after_warmup_iter(data, epoch, train_meters, idx)
+                pbar.set_description(log_msg(msg, "TRAIN"))
+                pbar.update()
 
         # update lr
         # get current lr
@@ -335,56 +345,80 @@ class BYOLTrainer:
         )
         return msg
 
+    def before_warmup_iter(self, data, epoch, train_meters, data_itx: int = 0):
+        train_start_time = time.time()
+        x, _, _ = data
+        batch_size = x.size(0)
+        loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal = self.rec_step(
+            data, epoch, train_meters, data_itx
+        )
 
-def before_warmup_iter(self, data, epoch, train_meters, data_itx: int = 0):
-    self.optimizer.zero_grad()
-    train_start_time = time.time()
+        train_meters["training_time"].update(time.time() - train_start_time)
+        train_meters["losses"].update(
+            loss_total.cpu().detach().numpy().mean(), batch_size
+        )
+        train_meters["loss_rec"].update(
+            (loss_rec_spec + loss_rec_normal).cpu().detach().numpy().mean(), batch_size
+        )
+        train_meters["loss_orthogonal"].update(
+            loss_orthogonal.cpu().detach().numpy().mean(), batch_size
+        )
 
-    # train_meters["data_time"].update(time.time() - train_start_time)
-    x, _, _ = data
-    x = x.float().cuda()
-    batch_size = x.size(0)
-    x = torch.squeeze(x, -1)
-    aug_1, aug_2 = self.aug(x)
-    aug_1 = aug_1.unsqueeze(-1)
-    aug_2 = aug_2.unsqueeze(-1)
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.7f}|loss_rec:{:.7f}|loss_orthogonal:{:.7f}|lr:{:.6f}".format(
+            epoch,
+            # train_meters["data_time"].avg,
+            train_meters["training_time"].avg,
+            train_meters["losses"].avg,
+            train_meters["loss_rec"].avg,
+            train_meters["loss_orthogonal"].avg,
+            self.optimizer.param_groups[0]["lr"],
+        )
+        return msg
 
-    # forward
-    (
-        inv_online_pred_one,
-        inv_online_pred_two,
-        inv_target_proj_one,
-        inv_target_proj_two,
-        cs_proj_one,
-        cs_proj_two,
-    ) = self.model(aug_1, aug_2)
-    loss_inv = self.inv_criterion(
-        inv_online_pred_one, inv_target_proj_two
-    ) + self.criterion(inv_online_pred_two, inv_target_proj_one)
+    def rec_step(self, x):
 
-    loss_cs = self.cs_criterion(cs_proj_one, cs_proj_two)
+        # rec step
+        self.optimizer.zero_grad()
+        x = x.float().cuda()
+        x = torch.squeeze(x, -1)
+        aug_spec, aug_normal = self.aug(x, step="rec")
+        aug_spec = aug_spec.unsqueeze(-1)
+        aug_normal = aug_normal.unsqueeze(-1)
 
-    loss_inv = loss_inv.mean()
+        # forward
+        (
+            rec_spec_batch_one,
+            rec_spec_batch_two,
+            rec_normal_batch_one,
+            rec_normal_batch_two,
+            normal_inv_representation,
+            spec_inv_representation,
+            normal_cs_representation,
+            spec_cs_representation,
+        ) = self.model(
+            step="rec", rec_batch_view_spec=aug_spec, rec_batch_view_normal=aug_normal
+        )
 
-    loss_cs = loss_cs.mean()
+        loss_rec_spec = self.rec_criterion(
+            rec_spec_batch_one, aug_spec
+        ) + self.rec_criterion(rec_spec_batch_two, aug_spec)
 
-    loss = loss_inv + self.cfg.MODEL.ARGS.LAMBDA * loss_cs
+        loss_rec_normal = self.rec_criterion(
+            rec_normal_batch_one, aug_normal
+        ) + self.rec_criterion(rec_normal_batch_two, aug_normal)
 
-    # backward
-    self.optimizer.zero_grad()
-    loss_inv.backward()
-    self.optimizer.step()
+        loss_orthogonal = self.orthogonal_criterion(
+            normal_inv_representation, normal_cs_representation
+        ) + self.orthogonal_criterion(spec_inv_representation, spec_cs_representation)
 
-    if self.model.use_momentum:
-        self.model.update_moving_average()
+        loss_total = (
+            self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_spec + loss_rec_normal)
+            + loss_orthogonal
+        )
 
-    train_meters["training_time"].update(time.time() - train_start_time)
-    train_meters["losses"].update(loss_inv.cpu().detach().numpy().mean(), batch_size)
-    msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.7f}|lr:{:.6f}".format(
-        epoch,
-        # train_meters["data_time"].avg,
-        train_meters["training_time"].avg,
-        train_meters["losses"].avg,
-        self.optimizer.param_groups[0]["lr"],
-    )
-    return msg
+        # backward
+        self.optimizer.zero_grad()
+        loss_total.backward()
+        self.optimizer.step()
+
+        return loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal
