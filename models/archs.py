@@ -16,6 +16,8 @@ from loguru import logger
 
 from utils.helpers import timing_start, timing_end
 
+from atcnet import ATCNet
+
 
 def create_VARCNNBackbone(cfg):
     return VARCNNBackbone(cfg)
@@ -539,6 +541,22 @@ class LinearClassifier(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+class AtcNetBackbone(nn.Module):
+    def __init__(self, cfg):
+        super(AtcNetBackbone, self).__init__()
+        self.cfg = cfg
+        self.head_projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+        self.net = ATCNet()
+        self.inv_head = nn.Linear
+
+
+        self.net.fc = nn.Identity(
+        )
+
+    
+
+
 
 
 class CurrentCLR(BaseNet):
