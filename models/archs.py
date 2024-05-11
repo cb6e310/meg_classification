@@ -423,6 +423,8 @@ class VARCNNBackbone(BaseNet):
         self.view = TensorView()
         self.dropout = nn.Dropout(p=0.5)
 
+        self.dist_head_inv = nn.Sequential(nn.Conv2d)
+
     def forward(self, x, target=None):
         x = self.transpose0(x)
         x = x.squeeze()
@@ -434,54 +436,39 @@ class VARCNNBackbone(BaseNet):
         x = self.pool(x)
         x = self.view(x)
         x = self.dropout(x)
+
         return x
 
 
-class LFCNN(BaseNet):
-    def __init__(self, cfg):
-        super().__init__()
-        meg_channels = cfg.DATASET.CHANNELS
-        points_length = cfg.DATASET.POINTS
-        num_classes = cfg.DATASET.NUM_CLASSES
+class EEGConvNetBackbone(nn.Module):
+    def __init__(self, num_classes=10):
+        super(ResNet, self).__init__()
+        self.in_channels = 64
+        self.conv = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn = nn.BatchNorm2d(64)
+        self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        max_pool = cfg.MODEL.ARGS.MAX_POOL
-        sources_channels = cfg.MODEL.ARGS.SOURCE_CHANNELS
+        # 三个残差块
+        self.block1 = ResidualBlock(64, 64)
+        self.block2 = ResidualBlock(64, 64)
+        self.block3 = ResidualBlock(64, 64)
+        self.block4 = ResidualBlock(64, 64)
 
-        batch_size = cfg.SOLVER.BATCH_SIZE
-
-        Conv = LFConv
-
-        self.net = nn.Sequential(
-            OrderedDict(
-                [
-                    ("transpose1", Transpose(1, 2)),
-                    ("Spatial", nn.Linear(meg_channels, sources_channels)),
-                    ("transpose1", Transpose(1, 2)),
-                    ("unsqueeze", Unsqueeze(-2)),
-                    (
-                        "Temporal_LF",
-                        Conv(
-                            in_channels=sources_channels,
-                            out_channels=sources_channels,
-                            kernel_size=7,
-                        ),
-                    ),
-                    ("active", nn.ReLU()),
-                    ("transpose2", Transpose(1, 2)),
-                    ("pool", nn.MaxPool2d((1, max_pool), (1, max_pool))),
-                    ("view", TensorView(batch_size, -1)),
-                    ("dropout", nn.Dropout(p=0.5)),
-                    (
-                        "linear",
-                        nn.Linear(sources_channels * int(points_length / 2), num_classes),
-                    ),
-                ]
-            )
-        )
+        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # self.fc = nn.Linear(64, num_classes)
 
     def forward(self, x):
-        x = torch.squeeze(x)
-        return self.net(x)
+        x = F.relu(self.bn(self.conv(x)))
+        x = self.pool(x)
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.block4(x)
+
+        x = self.avg_pool(x)
+        x = x.view(x.size(0), -1)
+        # x = self.fc(x)
+        return x
 
 
 class SimCLR(BaseNet):
@@ -541,22 +528,6 @@ class LinearClassifier(nn.Module):
 
     def forward(self, x):
         return self.model(x)
-
-class AtcNetBackbone(nn.Module):
-    def __init__(self, cfg):
-        super(AtcNetBackbone, self).__init__()
-        self.cfg = cfg
-        self.head_projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
-        self.net = ATCNet()
-        self.inv_head = nn.Linear
-
-
-        self.net.fc = nn.Identity(
-        )
-
-    
-
-
 
 
 class CurrentCLR(BaseNet):
@@ -672,7 +643,9 @@ class CurrentCLR(BaseNet):
 
             with torch.no_grad():
                 target_encoder = (
-                    self._get_target_encoder() if self.use_momentum else self.online_encoder
+                    self._get_target_encoder()
+                    if self.use_momentum
+                    else self.online_encoder
                 )
 
                 target_projections, _ = target_encoder(views)
