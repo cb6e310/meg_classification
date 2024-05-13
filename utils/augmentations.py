@@ -39,9 +39,16 @@ class AutoAUG(Module):
         # x shape: (batch, seq_len, channels)
         x=x.transpose(1,2)
 
-        if self.training and step is None:
+        if self.training and step is None and self.cfg.MODEL.TYPE== "current":
             raise ValueError("step is required during training")
-        
+        if self.training and self.cfg.MODEL.TYPE != "current":
+            transform = Compose(self.all_augs)
+            aug1 = transform(x)
+            aug2 = transform(x)
+            aug1 = aug1.transpose(1,2)
+            aug2 = aug2.transpose(1,2)
+            return aug1, aug2        
+
         if step == "clr":
             transform = Compose(self.normal_augs_wo_spec)
             aug1 = transform(x)

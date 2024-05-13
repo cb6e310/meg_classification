@@ -76,7 +76,7 @@ if __name__ == "__main__":
         )
         val_loader = None
 
-        aug = AutoAUG().cuda()
+        aug = AutoAUG(cfg).cuda()
 
         model = model_dict[cfg.MODEL.TYPE][0](cfg).cuda()
 

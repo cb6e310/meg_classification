@@ -16,8 +16,6 @@ from loguru import logger
 
 from utils.helpers import timing_start, timing_end
 
-from atcnet import ATCNet
-
 
 def create_VARCNNBackbone(cfg):
     return VARCNNBackbone(cfg)
@@ -308,10 +306,7 @@ class BYOL(nn.Module):
 
         online_projections, _ = self.online_encoder(views)
 
-        logger.debug(online_projections.shape)
-
         online_predictions = self.online_predictor(online_projections)
-        logger.debug(online_predictions.shape)
 
         online_pred_one, online_pred_two = online_predictions.chunk(2, dim=0)
 
@@ -419,11 +414,15 @@ class VARCNNBackbone(BaseNet):
         self.unsqueeze = Unsqueeze(-3)
         self.active = nn.LeakyReLU()
         self.pool = nn.MaxPool2d((1, 2), (1, 2))
+        self.dist_inv_head = nn.Sequential(
+            nn.Conv1d(sources_channels, sources_channels, 3, 1, 1), nn.LeakyReLU()
+        )
+        self.dist_acs_head = nn.Sequential(
+            nn.Conv1d(sources_channels, sources_channels, 3, 1, 1), nn.LeakyReLU()
+        )
         # self.pool = nn.AdaptiveAvgPool1d(1)
         self.view = TensorView()
         self.dropout = nn.Dropout(p=0.5)
-
-        self.dist_head_inv = nn.Sequential(nn.Conv2d)
 
     def forward(self, x, target=None):
         x = self.transpose0(x)
@@ -434,10 +433,17 @@ class VARCNNBackbone(BaseNet):
         # x = self.unsqueeze(x)
         x = self.active(x)
         x = self.pool(x)
-        x = self.view(x)
-        x = self.dropout(x)
 
-        return x
+        out_inv = self.dist_inv_head(x)
+        out_inv = self.view(out_inv)
+
+        out_acs = self.dist_acs_head(x)
+        out_acs = self.view(out_acs)
+
+        out = self.view(x)
+        out = self.dropout(out)
+
+        return out, out_inv, out_acs
 
 
 class EEGConvNetBackbone(nn.Module):
@@ -580,7 +586,11 @@ class CurrentCLR(BaseNet):
             projection_size, projection_size, projection_hidden_size, simple=simple
         )
 
-        # self.
+        self.decoder = ConvDecoder(
+            input_dim=projection_size,
+            output_channels=channels,
+            output_length=feature_size,
+        )
 
         # get device of network and make wrapper same device
         device = get_module_device(self.net)
@@ -661,6 +671,40 @@ class CurrentCLR(BaseNet):
             )
 
         elif step == "rec":
+            normal_inv_representation, normal_acs_representation = self.online_encoder(
+                rec_batch_view_normal
+            )
+            spec_inv_representation, spec_acs_representation = self.online_encoder(
+                rec_batch_view_spec
+            )
+
+            rec_spec_batch_one = self.decoder(
+                spec_inv_representation, spec_acs_representation
+            )
+
+            rec_spec_batch_two = self.decoder(
+                normal_inv_representation, spec_acs_representation
+            )
+
+            rec_normal_batch_one = self.decoder(
+                normal_inv_representation, normal_acs_representation
+            )
+
+            rec_normal_batch_two = self.decoder(
+                spec_inv_representation, normal_acs_representation
+            )
+
+            return (
+                rec_spec_batch_one,
+                rec_spec_batch_two,
+                rec_normal_batch_one,
+                rec_normal_batch_two,
+                normal_inv_representation,
+                spec_inv_representation,
+                normal_acs_representation,
+                spec_acs_representation,
+            )
+
             pass
 
         elif step == "cls":

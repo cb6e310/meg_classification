@@ -213,3 +213,32 @@ class DilatedConvEncoder(nn.Module):
         
     def forward(self, x):
         return self.net(x)
+
+class ConvDecoder(nn.Module):
+    def __init__(self, input_dim, output_channels, output_length):
+        super(ConvDecoder, self).__init__()
+        self.output_length = output_length
+
+        self.fc = nn.Linear(input_dim * 2, input_dim)
+
+        self.conv1 = nn.Conv1d(in_channels=input_dim, out_channels=input_dim*2, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv1d(in_channels=input_dim*2, out_channels=output_channels, kernel_size=3, padding=1)
+
+        self.adjust_length = nn.Conv1d(in_channels=output_channels, out_channels=output_channels, kernel_size=1)
+
+    def forward(self, x1, x2):
+        # x = torch.cat((x1, x2), dim=1)
+        x = F.normalize(torch.cat((x1, x2), dim=1), p=2, dim=1)
+        
+        x = self.fc(x)
+
+        x = x.unsqueeze(2)
+
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+
+        if x.shape[2] < self.output_length:
+            x = nn.functional.interpolate(x, size=self.output_length, mode='linear', align_corners=True)
+        x = self.adjust_length(x)
+
+        return x

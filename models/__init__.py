@@ -5,9 +5,7 @@ from models.archs import *
 from models.losses import *
 
 model_dict = {
-    "LFCNN": (LFCNN, ""),
     "VARCNN": (VARCNN, ""),
-    "TimeNet": (TimeNet, ""),
     "SimCLR": (SimCLR, ""),
     "LinearClassifier": (LinearClassifier, ""),
     "BYOL": (BYOL, ""),
