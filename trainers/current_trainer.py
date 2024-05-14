@@ -322,8 +322,8 @@ class BYOLTrainer:
         train_meters["loss_cls"].update(
             loss_cls.cpu().detach().numpy().mean(), batch_size
         )
-
-        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.7f}|loss_rec:{:.7f}|loss_orthogonal:{:.7f}|loss_clr:{:.7f}|loss_cls:{:.7f}|lr:{:.6f}".format(
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss_rec_total:{:.7f}|loss_rec_spec:{:.7f}|loss_rec_normal:{:.7f}\n"
+        "|loss_orthogonal:{:.7f}|loss_clr:{:.7f}|loss_cls:{:.7f}|lr:{:.6f}".format(
             epoch,
             # train_meters["data_time"].avg,
             train_meters["training_time"].avg,
@@ -454,10 +454,7 @@ class BYOLTrainer:
         aug = aug.unsqueeze(-1)
 
         # forward
-        (
-            cls_online_pred,
-            cls_target_proj,
-        ) = self.model(step="cls", cls_batch_view=aug, labels=labels)
+        cls_online_pred = self.model(step="cls", cls_batch_view=aug, labels=labels)
 
         loss_cls = self.cls_criterion(cls_online_pred, labels)
 

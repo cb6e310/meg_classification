@@ -592,6 +592,8 @@ class CurrentCLR(BaseNet):
             output_length=feature_size,
         )
 
+        self.cls_fc = nn.Linear(projection_size, cfg.DATASET.NUM_CLASSES)
+
         # get device of network and make wrapper same device
         device = get_module_device(self.net)
         self.to(device)
@@ -708,5 +710,6 @@ class CurrentCLR(BaseNet):
             pass
 
         elif step == "cls":
-            
-            pass
+            cls_representation = self.online_encoder(cls_batch_view)
+            cls_logits = self.cls_fc(cls_representation)
+            return cls_logits
