@@ -20,12 +20,15 @@ from utils.helpers import timing_start, timing_end
 def create_VARCNNBackbone(cfg):
     return VARCNNBackbone(cfg)
 
+def create_EEGConvNetBackbone(cfg):
+    return EEGConvNetBackbone(cfg)
 
 backbone_dict = {
     "resnet18": [models.resnet18, 512],
     "resnet34": [models.resnet34, 512],
     "resnet50": [models.resnet50, 2048],
     "varcnn": [create_VARCNNBackbone, 1800],
+    "eegconvnet":[create_EEGConvNetBackbone, 360]
 }
 
 
@@ -447,14 +450,13 @@ class VARCNNBackbone(BaseNet):
 
 
 class EEGConvNetBackbone(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, cfg):
         super(ResNet, self).__init__()
         self.in_channels = 64
         self.conv = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn = nn.BatchNorm2d(64)
         self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        # 三个残差块
         self.block1 = ResidualBlock(64, 64)
         self.block2 = ResidualBlock(64, 64)
         self.block3 = ResidualBlock(64, 64)
@@ -564,7 +566,8 @@ class CurrentCLR(BaseNet):
             self.net.conv1 = nn.Conv2d(
                 channels, 64, kernel_size=3, stride=1, padding=1, bias=False
             )
-        elif "varcnn" in cfg.MODEL.ARGS.BACKBONE:
+        # elif "varcnn" in cfg.MODEL.ARGS.BACKBONE:
+        else:
             self.net = backbone_dict[cfg.MODEL.ARGS.BACKBONE][0](cfg)
             # simple = True
 
