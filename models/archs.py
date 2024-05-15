@@ -695,7 +695,7 @@ class CurrentCLR(BaseNet):
             projection_size, projection_size, projection_hidden_size, simple=simple
         )
 
-        self.decoder = ConvDecoder(
+        self.decoder = ConvGenerator(
             input_dim=projection_size,
             output_channels=channels,
             output_length=feature_size,
