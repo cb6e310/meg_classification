@@ -25,19 +25,27 @@ from utils.config import (
     save_cfg,
 )
 
+from models.losses import (
+    OrthLoss,
+)
+
 from loguru import logger
 
 from utils.validate import validate
 
 
-class BYOLTrainer:
+class CurrentTrainer:
     def __init__(
         self, experiment_name, model, criterion, train_loader, val_loader, aug, cfg
     ):
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.criterion = criterion
+        self.clr_criterion = criterion
+        self.rec_criterion =torch.nn.L1Loss().cuda()
+        self.orthogonal_criterion = OrthLoss().cuda()
+        self.cls_criterion = torch.nn.CrossEntropyLoss().cuda()
+
         self.model = model
         self.aug = aug
         self.tau_base = cfg.MODEL.ARGS.TAU_BASE

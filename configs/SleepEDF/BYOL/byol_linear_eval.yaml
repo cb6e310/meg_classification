@@ -19,22 +19,23 @@ DATASET:
 MODEL:
   TYPE: "BYOL"
   ARGS:
-    BACKBONE: "resnet50"
+    BACKBONE: "eegconvnet"
     SIAMESE: True
-    N_FEATURES: 2048 # backbone output feature dimension
+    N_FEATURES: 256 # backbone output feature dimension
     PROJECTION_DIM: 128
+    HIDDEN_LAYER: -1
     USE_MOMENTUM: True  # True for BYOL, False for SimSiam
     PROJECTION_HIDDEN_SIZE: 2048
     TAU_BASE: 0.996
     CLASSIFIER: "LinearClassifier"
-    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/byol_pretext_2024-05-01_04-03-01/checkpoints/epoch_49_0_chkp.tar"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/byol_pretext_2024-05-14_02-36-04/checkpoints/epoch_49_0_chkp.tar"
     # SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "CE"
 SOLVER:
   BATCH_SIZE: 512
   EPOCHS: 400
-  LR: 0.1
+  LR: 0.01
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99

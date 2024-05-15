@@ -20,15 +20,17 @@ from utils.helpers import timing_start, timing_end
 def create_VARCNNBackbone(cfg):
     return VARCNNBackbone(cfg)
 
+
 def create_EEGConvNetBackbone(cfg):
     return EEGConvNetBackbone(cfg)
+
 
 backbone_dict = {
     "resnet18": [models.resnet18, 512],
     "resnet34": [models.resnet34, 512],
     "resnet50": [models.resnet50, 2048],
     "varcnn": [create_VARCNNBackbone, 1800],
-    "eegconvnet":[create_EEGConvNetBackbone, 360]
+    "eegconvnet": [create_EEGConvNetBackbone, 64],
 }
 
 
@@ -195,7 +197,6 @@ class NetWrapper(nn.Module):
             self._register_hook()
 
         self.hidden.clear()
-        # logger.debug(x.shape)
         _ = self.net(x)
         hidden = self.hidden[x.device]
         self.hidden.clear()
@@ -205,7 +206,13 @@ class NetWrapper(nn.Module):
 
     def forward(self, x, return_projection=True):
         representation = self.get_representation(x)
-
+        if type(self.net).__name__ == "EEGConvNetBackbone":
+            representation = representation[0]
+            inv_representation = representation[1]
+            acs_representation = representation[2]
+            # logger.debug(representation.shape)
+            if not return_projection:
+                return representation, inv_representation, acs_representation
         if not return_projection:
             return representation
 
@@ -230,7 +237,7 @@ class BYOL(nn.Module):
         super().__init__()
         feature_size = cfg.DATASET.POINTS
         channels = cfg.DATASET.CHANNELS
-        hidden_layer = -2
+        hidden_layer = cfg.MODEL.ARGS.HIDDEN_LAYER
         projection_size = cfg.MODEL.ARGS.PROJECTION_DIM
         projection_hidden_size = cfg.MODEL.ARGS.PROJECTION_HIDDEN_SIZE
         moving_average_decay = cfg.MODEL.ARGS.TAU_BASE
@@ -243,7 +250,7 @@ class BYOL(nn.Module):
             self.net.conv1 = nn.Conv2d(
                 channels, 64, kernel_size=3, stride=1, padding=1, bias=False
             )
-        elif "varcnn" in cfg.MODEL.ARGS.BACKBONE:
+        else:
             self.net = backbone_dict[cfg.MODEL.ARGS.BACKBONE][0](cfg)
             # simple = True
 
@@ -274,7 +281,7 @@ class BYOL(nn.Module):
             torch.randn(1, channels, feature_size, 1, device=device),
             torch.randn(1, channels, feature_size, 1, device=device),
         )
-        print(self.net)
+        print(self.online_encoder)
 
     @singleton("target_encoder")
     def _get_target_encoder(self):
@@ -308,8 +315,10 @@ class BYOL(nn.Module):
         views = torch.cat((batch_view_1, batch_view_2), dim=0)
 
         online_projections, _ = self.online_encoder(views)
+        # logger.debug(online_projections.shape)
 
         online_predictions = self.online_predictor(online_projections)
+        # logger.debug(online_predictions.shape)
 
         online_pred_one, online_pred_two = online_predictions.chunk(2, dim=0)
 
@@ -451,18 +460,20 @@ class VARCNNBackbone(BaseNet):
 
 class EEGConvNetBackbone(nn.Module):
     def __init__(self, cfg):
-        super(ResNet, self).__init__()
+        super(EEGConvNetBackbone, self).__init__()
         self.in_channels = 64
         self.conv = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn = nn.BatchNorm2d(64)
         self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        self.block1 = ResidualBlock(64, 64)
-        self.block2 = ResidualBlock(64, 64)
-        self.block3 = ResidualBlock(64, 64)
-        self.block4 = ResidualBlock(64, 64)
-
+        self.block1 = ResidualBlock(64, 256)
+        self.block2 = ResidualBlock(256, 256)
+        self.block3 = ResidualBlock(256, 256)
+        self.block4 = ResidualBlock(256, 256)
+        self.view = TensorView()
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dist_inv_head = nn.Sequential(nn.Conv2d(256, 256, 3, 1, 1), nn.LeakyReLU())
+        self.dist_acs_head = nn.Sequential(nn.Conv2d(256, 256, 3, 1, 1), nn.LeakyReLU())
         # self.fc = nn.Linear(64, num_classes)
 
     def forward(self, x):
@@ -472,11 +483,18 @@ class EEGConvNetBackbone(nn.Module):
         x = self.block2(x)
         x = self.block3(x)
         x = self.block4(x)
+        out_inv = self.dist_inv_head(x)
+        out_inv = self.avg_pool(out_inv)
+        out_inv = self.view(out_inv)
+
+        out_acs = self.dist_acs_head(x)
+        out_acs = self.avg_pool(out_acs)
+        out_acs = self.view(out_acs)
 
         x = self.avg_pool(x)
-        x = x.view(x.size(0), -1)
-        # x = self.fc(x)
-        return x
+        out = self.view(x)
+
+        return out, out_inv, out_acs
 
 
 class SimCLR(BaseNet):
@@ -538,6 +556,94 @@ class LinearClassifier(nn.Module):
         return self.model(x)
 
 
+class CurrentNetWrapper(nn.Module):
+    def __init__(
+        self,
+        net,
+        projection_size,
+        projection_hidden_size,
+        layer=-2,
+        use_simsiam_mlp=False,
+        sync_batchnorm=None,
+        simple=False,
+    ):
+        super().__init__()
+        self.net = net
+        self.layer = layer
+
+        self.projector = None
+        self.projection_size = projection_size
+        self.projection_hidden_size = projection_hidden_size
+
+        self.use_simsiam_mlp = use_simsiam_mlp
+        self.sync_batchnorm = sync_batchnorm
+
+        self.hidden = {}
+        self.hook_registered = False
+
+        self.simple = simple
+
+    def _find_layer(self):
+        if type(self.layer) == str:
+            modules = dict([*self.net.named_modules()])
+            return modules.get(self.layer, None)
+        elif type(self.layer) == int:
+            children = [*self.net.children()]
+            return children[self.layer]
+        return None
+
+    def _hook(self, _, input, output):
+        device = input[0].device
+        self.hidden[device] = flatten(output)
+
+    def _register_hook(self):
+        layer = self._find_layer()
+        assert layer is not None, f"hidden layer ({self.layer}) not found"
+        handle = layer.register_forward_hook(self._hook)
+        self.hook_registered = True
+
+    @singleton("projector")
+    def _get_projector(self, hidden):
+        _, dim = hidden.shape
+        create_mlp_fn = MLP if not self.use_simsiam_mlp else SimSiamMLP
+        projector = create_mlp_fn(
+            dim,
+            self.projection_size,
+            self.projection_hidden_size,
+            sync_batchnorm=self.sync_batchnorm,
+            simple=self.simple,
+        )
+        return projector.to(hidden)
+
+    def get_representation(self, x):
+        if self.layer == -1:
+            return self.net(x)
+
+        if not self.hook_registered:
+            self._register_hook()
+
+        self.hidden.clear()
+        _ = self.net(x)
+        hidden = self.hidden[x.device]
+        self.hidden.clear()
+
+        assert hidden is not None, f"hidden layer {self.layer} never emitted an output"
+        return hidden
+
+    def forward(self, x, return_projection=True):
+        representations = self.get_representation(x)
+        # representation = representations[0]
+        inv_representation = representations[1]
+        acs_representation = representations[2]
+        # logger.debug(representation.shape)
+        if not return_projection:
+            return inv_representation, acs_representation
+
+        projector = self._get_projector(inv_representation)
+        projection = projector(inv_representation)
+        return projection, inv_representation
+
+
 class CurrentCLR(BaseNet):
     def __init__(
         self,
@@ -550,10 +656,10 @@ class CurrentCLR(BaseNet):
         # use_momentum=True,
         # sync_batchnorm=None,
     ):
-        super().__init__()
+        super().__init__(cfg)
         feature_size = cfg.DATASET.POINTS
         channels = cfg.DATASET.CHANNELS
-        hidden_layer = -2
+        hidden_layer = cfg.MODEL.ARGS.HIDDEN_LAYER
         projection_size = cfg.MODEL.ARGS.PROJECTION_DIM
         projection_hidden_size = cfg.MODEL.ARGS.PROJECTION_HIDDEN_SIZE
         moving_average_decay = cfg.MODEL.ARGS.TAU_BASE
@@ -571,7 +677,7 @@ class CurrentCLR(BaseNet):
             self.net = backbone_dict[cfg.MODEL.ARGS.BACKBONE][0](cfg)
             # simple = True
 
-        self.online_encoder = NetWrapper(
+        self.online_encoder = CurrentNetWrapper(
             self.net,
             projection_size,
             projection_hidden_size,
@@ -603,6 +709,7 @@ class CurrentCLR(BaseNet):
 
         # send a mock image tensor to instantiate singleton parameters
         self.forward(
+            "clr",
             torch.randn(1, channels, feature_size, 1, device=device),
             torch.randn(1, channels, feature_size, 1, device=device),
         )
@@ -645,13 +752,11 @@ class CurrentCLR(BaseNet):
 
         if step == "clr":
             if return_embedding:
-                return self.online_encoder(
-                    clr_batch_view_1, return_projection=return_projection
-                )
+                return self.online_encoder(clr_batch_view_1, return_projection=False)
 
             views = torch.cat((clr_batch_view_1, clr_batch_view_2), dim=0)
 
-            online_projections, _ = self.online_encoder(views)
+            online_projections, _ = self.online_encoder(views, return_projection=True)
             online_predictions = self.online_predictor(online_projections)
 
             online_pred_one, online_pred_two = online_predictions.chunk(2, dim=0)
@@ -677,10 +782,10 @@ class CurrentCLR(BaseNet):
 
         elif step == "rec":
             normal_inv_representation, normal_acs_representation = self.online_encoder(
-                rec_batch_view_normal
+                rec_batch_view_normal, return_projection=False
             )
             spec_inv_representation, spec_acs_representation = self.online_encoder(
-                rec_batch_view_spec
+                rec_batch_view_spec, return_projection=False
             )
 
             rec_spec_batch_one = self.decoder(
@@ -699,6 +804,11 @@ class CurrentCLR(BaseNet):
                 spec_inv_representation, normal_acs_representation
             )
 
+            rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
+            rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
+            rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
+            rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
+
             return (
                 rec_spec_batch_one,
                 rec_spec_batch_two,
@@ -713,6 +823,8 @@ class CurrentCLR(BaseNet):
             pass
 
         elif step == "cls":
-            cls_representation = self.online_encoder(cls_batch_view)
+            _, cls_representation = self.online_encoder(
+                cls_batch_view, return_projection=False
+            )
             cls_logits = self.cls_fc(cls_representation)
             return cls_logits
