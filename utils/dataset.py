@@ -13,7 +13,7 @@ from utils.helpers import (
     split_with_nan,
 )
 
-from sklearn import preprocessing
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 class SimpleDataset(Dataset):
@@ -41,14 +41,25 @@ class SimpleDataset(Dataset):
         # expand last dim for channel
         if len(self.x_data.shape) < 4:
             self.x_data = self.x_data.unsqueeze(3)
-        print("dataset info: classes, shape")
-        print(
-            self.y_data.unique().shape[0],
-            self.x_data.shape,
+        logger.info("dataset info: classes, shape")
+        logger.info(
+            str(self.y_data.unique().shape[0]),
+            str(self.x_data.shape),
         )
-        self.x_norm = preprocessing.normalize(self.x_data.reshape(-1, 3000), axis=0).reshape(
-            -1, 1, 3000
-        ) 
+        logger.info(
+            "data statistics: max {}, min {}, mean {}, std {}".format(
+                self.x_data.max(),
+                self.x_data.min(),
+                self.x_data.mean(),
+                self.x_data.std(),
+            )
+        )
+        self.x_norm = (
+            StandardScaler()
+            .fit_transform(self.x_data.reshape(-1, self.x_data.shape[-1]))
+            .reshape(self.x_data.shape)
+        )
+        pass
         # self.aug1, self.aug2 = DataTransform(self.x_data)
         # logger.info("SiameseDataset: Augmentation done")
 

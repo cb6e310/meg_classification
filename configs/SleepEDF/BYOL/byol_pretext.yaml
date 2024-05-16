@@ -2,12 +2,12 @@ EXPERIMENT:
   NAME: "byol_pretext"
   TAG: "baselines"
   PROJECT: "baseline project"
-  DEBUG: True
+  DEBUG: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
-  RESUME : False  # Resume training
-  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
-  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  RESUME : True # Resume training
+  CHECKPOINT : "baseline project/byol_pretext_2024-05-16_02-39-57" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : 49  # Choose index of checkpoint to start from. If None, uses the latest chkp
 DATASET:
   ROOT: "/home/song/datasets/EEG"
   TYPE: "sleepedf20"
@@ -32,11 +32,11 @@ MODEL:
       # SOURCE_CHANNELS: 36
 SOLVER:
   TRAINER: "BYOL"
-  BATCH_SIZE: 100
+  BATCH_SIZE: 512
   EPOCHS: 300
-  LR: 0.001
+  LR: 0.0001
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.9
-    MIN_LR: 0.0001
+    MIN_LR: 0.0000001
 

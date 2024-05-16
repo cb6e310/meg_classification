@@ -79,6 +79,7 @@ if __name__ == "__main__":
         aug = AutoAUG(cfg).cuda()
 
         model = model_dict[cfg.MODEL.TYPE][0](cfg).cuda()
+        logger.info("model's device: {}".format(next(model.parameters()).device))
 
         # model = nn.DataParallel(model)
 

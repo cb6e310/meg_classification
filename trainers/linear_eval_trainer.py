@@ -196,8 +196,8 @@ class LinearEvalTrainer:
             # if self.cfg.MODEL.TYPE == "BYOL":
             #     x = torch.unsqueeze(x, -1)
             with torch.no_grad():
-                h = self.model(x, x, return_embedding=True, return_projection=False)
-
+                if self.cfg.MODEL.ARGS.BACKBONE == "eegconvnet":
+                    h = self.model(x, x, return_embedding=True, return_projection=False)[0]
             h = h.detach()
 
             feature_vector.extend(h.cpu().detach().numpy())

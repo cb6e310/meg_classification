@@ -42,7 +42,7 @@ class CurrentTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.clr_criterion = criterion
-        self.rec_criterion =torch.nn.L1Loss().cuda()
+        self.rec_criterion = torch.nn.L1Loss().cuda()
         self.orthogonal_criterion = OrthLoss().cuda()
         self.cls_criterion = torch.nn.CrossEntropyLoss().cuda()
 
@@ -100,7 +100,7 @@ class CurrentTrainer:
                 self.model.load_state_dict(self.chkp["model_state_dict"])
                 self.optimizer.load_state_dict(self.chkp["optimizer"])
                 self.scheduler.load_state_dict(self.chkp["scheduler"])
-                self.best_acc = self.chkp["best_acc"]
+                # self.best_acc = self.chkp["best_acc"]
                 self.best_epoch = self.chkp["epoch"]
                 self.resume_epoch = self.chkp["epoch"]
 
@@ -188,6 +188,14 @@ class CurrentTrainer:
             lines.append(os.linesep)
             writer.writelines(lines)
 
+    def log_imgs(self, epoch, imgs):
+        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
+            lines = ["epoch: {}\t".format(epoch)]
+            for k, v in log_dict.items():
+                lines.append("{}: {:.4f}\t".format(k, v))
+            lines.append(os.linesep)
+            writer.writelines(lines)
+
     def train(self, repetition_id=0):
         self.current_epoch = 0
 
@@ -220,7 +228,6 @@ class CurrentTrainer:
         train_meters = {
             "training_time": AverageMeter(),
             # "data_time": AverageMeter(),
-
             "loss_total_rec": AverageMeter(),
             "loss_rec_spec": AverageMeter(),
             "loss_rec_normal": AverageMeter(),
@@ -236,12 +243,12 @@ class CurrentTrainer:
         self.model.train()
         if epoch < self.warmup_epochs:
             for idx, data in enumerate(self.train_loader):
-                msg = self.before_warmup_iter(data, epoch, train_meters, idx)
+                msg, imgs = self.before_warmup_iter(data, epoch, train_meters, idx)
                 pbar.set_description(log_msg(msg, "TRAIN"))
                 pbar.update()
         else:
             for idx, data in enumerate(self.train_loader):
-                msg = self.after_warmup_iter(data, epoch, train_meters, idx)
+                msg, imgs = self.after_warmup_iter(data, epoch, train_meters, idx)
                 pbar.set_description(log_msg(msg, "TRAIN"))
                 pbar.update()
 
@@ -262,13 +269,16 @@ class CurrentTrainer:
         # log
         log_dict = OrderedDict(
             {
-                "train_acc": train_meters["top1"].avg,
-                "train_loss": train_meters["losses"].avg,
-                "test_acc": test_acc,
-                "test_loss": test_loss,
+                "loss_total_rec": train_meters["loss_total_rec"].avg,
+                "loss_rec_spec": train_meters["loss_rec_spec"].avg,
+                "loss_rec_normal": train_meters["loss_rec_normal"].avg,
+                "loss_orthogonal": train_meters["loss_orthogonal"].avg,
+                "loss_clr": train_meters["loss_clr"].avg,
+                "loss_cls": train_meters["loss_cls"].avg,
             }
         )
         self.log(epoch, log_dict)
+        self.log
         # saving checkpoint
         # saving occasional checkpoints
 
@@ -278,8 +288,8 @@ class CurrentTrainer:
             "model": self.cfg.MODEL.TYPE,
             "optimizer": self.optimizer.state_dict(),
             "scheduler": self.scheduler.state_dict(),
-            "best_acc": self.best_acc,
-            "loss": train_meters["losses"].avg,
+            # "best_acc": self.best_acc,
+            # "loss": train_meters["losses"].avg,
             "dataset": self.cfg.DATASET.TYPE,
         }
 
@@ -307,11 +317,15 @@ class CurrentTrainer:
         x, _, _ = data
         batch_size = x.size(0)
 
-        loss_total_rec, loss_rec_spec, loss_rec_normal, loss_orthogonal = self.rec_step(x)
+        loss_total_rec, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = (
+            self.rec_step(x)
+        )
 
         loss_clr = self.clr_step(x)
 
         loss_cls = self.cls_step(x)
+
+        loss_total = loss_clr + loss_cls + loss_total_rec
 
         train_meters["training_time"].update(time.time() - train_start_time)
         train_meters["loss_total_rec"].update(
@@ -332,8 +346,7 @@ class CurrentTrainer:
         train_meters["loss_cls"].update(
             loss_cls.cpu().detach().numpy().mean(), batch_size
         )
-        msg = "Epoch:{}|Time(train):{:.2f}|Loss_rec_total:{:.7f}|loss_rec_spec:{:.7f}|loss_rec_normal:{:.7f}\n"
-        "|loss_orthogonal:{:.7f}|loss_clr:{:.7f}|loss_cls:{:.7f}|lr:{:.6f}".format(
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss_rec_total:{:.4f}|loss_rec_spec:{:.4f}|loss_rec_normal:{:.4f}|loss_orthogonal:{:.4f}|loss_clr:{:.4f}|loss_cls:{:.4f}|lr:{:.6f}".format(
             epoch,
             # train_meters["data_time"].avg,
             train_meters["training_time"].avg,
@@ -346,14 +359,16 @@ class CurrentTrainer:
             self.optimizer.param_groups[0]["lr"],
         )
 
-        return msg
+        return msg, process_imgs
 
     def before_warmup_iter(self, data, epoch, train_meters, data_itx: int = 0):
         train_start_time = time.time()
         x, _, _ = data
         batch_size = x.size(0)
 
-        loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal = self.rec_step(x)
+        loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = (
+            self.rec_step(x)
+        )
 
         train_meters["training_time"].update(time.time() - train_start_time)
         train_meters["losses"].update(
@@ -423,7 +438,20 @@ class CurrentTrainer:
         loss_total.backward()
         self.optimizer.step()
 
-        return loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal
+        process_imgs = torch.cat(
+            (
+                x,
+                aug_spec,
+                aug_normal,
+                rec_spec_batch_one,
+                rec_spec_batch_two,
+                rec_normal_batch_one,
+                rec_normal_batch_two,
+            ),
+            0,
+        )[:3]
+
+        return loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs
 
     def clr_step(self, x):
         # clr step

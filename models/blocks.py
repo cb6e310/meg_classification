@@ -247,7 +247,7 @@ class ConvGenerator(nn.Module):
         self.norm2 = nn.BatchNorm1d(256)
 
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
+        self.tanh = nn.Tanh()
         self.output_length = output_length
 
     def forward(self, x1, x2):
@@ -259,7 +259,7 @@ class ConvGenerator(nn.Module):
 
         x = self.relu(self.norm1(self.conv1(x)))
         x = self.relu(self.norm2(self.conv2(x)))
-        x = self.sigmoid(self.conv3(x))
+        x = self.tanh(self.conv3(x))
 
         x = nn.functional.interpolate(x, size=self.output_length, mode='linear', align_corners=True)
 
