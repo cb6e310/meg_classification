@@ -13,6 +13,7 @@ from utils.helpers import (
     split_with_nan,
 )
 
+from sklearn import preprocessing
 
 
 class SimpleDataset(Dataset):
@@ -45,13 +46,15 @@ class SimpleDataset(Dataset):
             self.y_data.unique().shape[0],
             self.x_data.shape,
         )
-
+        self.x_norm = preprocessing.normalize(self.x_data.reshape(-1, 3000), axis=0).reshape(
+            -1, 1, 3000
+        ) 
         # self.aug1, self.aug2 = DataTransform(self.x_data)
         # logger.info("SiameseDataset: Augmentation done")
 
     def __getitem__(self, index):
         return (
-            self.x_data[index],
+            self.x_norm[index],
             self.y_data[index],
             index,
         )
@@ -84,7 +87,12 @@ def TS2Vec_Train_Dataset(train_data, cfg):
 
 
 def get_data_loader_from_dataset(
-    dataset_path, cfg, train=True, batch_size=256, shuffle=True, siamese=False, 
+    dataset_path,
+    cfg,
+    train=True,
+    batch_size=256,
+    shuffle=True,
+    siamese=False,
 ):
     # local dataset
     if dataset_path.startswith("/home"):

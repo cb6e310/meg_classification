@@ -220,8 +220,10 @@ class CurrentTrainer:
         train_meters = {
             "training_time": AverageMeter(),
             # "data_time": AverageMeter(),
-            "losses": AverageMeter(),
-            "loss_rec": AverageMeter(),
+
+            "loss_total_rec": AverageMeter(),
+            "loss_rec_spec": AverageMeter(),
+            "loss_rec_normal": AverageMeter(),
             "loss_orthogonal": AverageMeter(),
             "loss_clr": AverageMeter(),
             "loss_cls": AverageMeter(),
@@ -438,7 +440,7 @@ class CurrentTrainer:
             clr_online_pred_two,
             clr_target_proj_one,
             clr_target_proj_two,
-        ) = self.model(step="clr", clr_batch_view_one=aug_1, clr_batch_view_two=aug_2)
+        ) = self.model(step="clr", clr_batch_view_1=aug_1, clr_batch_view_2=aug_2)
 
         loss_clr = self.clr_criterion(
             clr_online_pred_one, clr_target_proj_two
@@ -459,10 +461,11 @@ class CurrentTrainer:
         x = x.float().cuda()
         x = torch.squeeze(x, -1)
         aug, labels = self.aug(x, step="cls")
-        aug = aug.unsqueeze(-1)
+        aug = aug.unsqueeze(-1).cuda()
+        labels = labels.cuda()
 
         # forward
-        cls_online_pred = self.model(step="cls", cls_batch_view=aug, labels=labels)
+        cls_online_pred = self.model(step="cls", cls_batch_view=aug)
 
         loss_cls = self.cls_criterion(cls_online_pred, labels)
 

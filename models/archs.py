@@ -205,11 +205,11 @@ class NetWrapper(nn.Module):
         return hidden
 
     def forward(self, x, return_projection=True):
-        representation = self.get_representation(x)
+        representations = self.get_representation(x)
         if type(self.net).__name__ == "EEGConvNetBackbone":
-            representation = representation[0]
-            inv_representation = representation[1]
-            acs_representation = representation[2]
+            representation = representations[0]
+            inv_representation = representations[1]
+            acs_representation = representations[2]
             # logger.debug(representation.shape)
             if not return_projection:
                 return representation, inv_representation, acs_representation
@@ -278,6 +278,7 @@ class BYOL(nn.Module):
 
         # send a mock image tensor to instantiate singleton parameters
         self.forward(
+            
             torch.randn(1, channels, feature_size, 1, device=device),
             torch.randn(1, channels, feature_size, 1, device=device),
         )
