@@ -5,9 +5,9 @@ EXPERIMENT:
   DEBUG: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
-  RESUME : True # Resume training
-  CHECKPOINT : "baseline project/byol_pretext_2024-05-16_02-39-57" # 'Log_2020-03-19_19-53-27'
-  CHKP_IDX : 49  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  RESUME : False # Resume training
+  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
 DATASET:
   ROOT: "/home/song/datasets/EEG"
   TYPE: "sleepedf20"

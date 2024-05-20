@@ -42,10 +42,7 @@ class SimpleDataset(Dataset):
         if len(self.x_data.shape) < 4:
             self.x_data = self.x_data.unsqueeze(3)
         logger.info("dataset info: classes, shape")
-        logger.info(
-            str(self.y_data.unique().shape[0]),
-            str(self.x_data.shape),
-        )
+        logger.info("{}, {}".format(self.y_data.unique(), self.x_data.shape))
         logger.info(
             "data statistics: max {}, min {}, mean {}, std {}".format(
                 self.x_data.max(),

@@ -2,7 +2,7 @@ EXPERIMENT:
   NAME: "current_pretext"
   TAG: "proposed"
   PROJECT: "proposed project"
-  DEBUG: True
+  DEBUG: False 
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training

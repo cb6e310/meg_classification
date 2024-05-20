@@ -51,11 +51,13 @@ if __name__ == "__main__":
         experiment_name += ",".join(addtional_tags)
     experiment_name = os.path.join(cfg.EXPERIMENT.PROJECT, experiment_name)
     if not cfg.EXPERIMENT.DEBUG:
-        try:
-            import wandb
-            wandb.init(project=cfg.EXPERIMENT.PROJECT, name=experiment_name, tags=tags)
-        except:
-            print(log_msg("Failed to use WANDB", "INFO"))
+        # try:
+        #     from torch.utils.tensorboard import SummaryWriter 
+        #     # wandb.init(project=cfg.EXPERIMENT.PROJECT, name=experiment_name, tags=tags)
+        #     writer = SummaryWriter(log_dir=os.path.join("runs", experiment_name))
+        # except:
+        #     print(log_msg("Failed to use WANDB", "INFO"))
+        pass
 
     # cfg & loggers
     show_cfg(cfg)

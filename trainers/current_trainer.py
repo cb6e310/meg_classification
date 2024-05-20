@@ -7,8 +7,11 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data.dataloader import DataLoader
-
+from torchvision.utils import make_grid
+from torch.utils.tensorboard import SummaryWriter
+from io import BytesIO
 import numpy as np
+import matplotlib.pyplot as plt
 
 import getpass
 
@@ -63,71 +66,80 @@ class CurrentTrainer:
 
         username = getpass.getuser()
         # init loggers
-        cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-        experiment_name = experiment_name + "_" + cur_time
-        self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
-        if not os.path.exists(self.log_path):
-            os.makedirs(self.log_path)
-        # self.tf_writer = SummaryWriter(os.path.join(self.log_path, "train.events"))
+        if not cfg.EXPERIMENT.DEBUG:
 
-        if not cfg.EXPERIMENT.RESUME:
-            save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-            os.mkdir(os.path.join(self.log_path, "checkpoints"))
-
-        # Choose here if you want to start training from a previous snapshot (None for new training)
-        if cfg.EXPERIMENT.RESUME:
-            if cfg.EXPERIMENT.CHECKPOINT != "":
-                chkp_path = os.path.join(
-                    "results", cfg.EXPERIMENT.CHECKPOINT, "checkpoints"
-                )
-                chkps = [f for f in os.listdir(chkp_path) if f[:4] == "chkp"]
-
-                # Find which snapshot to restore
-                if cfg.EXPERIMENT.CHKP_IDX is None:
-                    chosen_chkp = "current_chkp.tar"
-                else:
-                    chosen_chkp = np.sort(chkps)[cfg.EXPERIMENT.CHKP_IDX]
-                chosen_chkp = os.path.join(
-                    "results", cfg.EXPERIMENT.CHECKPOINT, "checkpoints", chosen_chkp
-                )
-
-                print(log_msg("Loading model from {}".format(chosen_chkp), "INFO"))
-                print(
-                    log_msg("Current epoch: {}".format(cfg.EXPERIMENT.CHKP_IDX), "INFO")
-                )
-
-                self.chkp = torch.load(chosen_chkp)
-                self.model.load_state_dict(self.chkp["model_state_dict"])
-                self.optimizer.load_state_dict(self.chkp["optimizer"])
-                self.scheduler.load_state_dict(self.chkp["scheduler"])
-                # self.best_acc = self.chkp["best_acc"]
-                self.best_epoch = self.chkp["epoch"]
-                self.resume_epoch = self.chkp["epoch"]
-
-                if self.chkp["dataset"] != cfg.DATASET.TYPE:
-                    print(
-                        log_msg(
-                            "ERROR: dataset in checkpoint is different from current dataset",
-                            "ERROR",
-                        )
-                    )
-                    exit()
-                if self.chkp["model"] != cfg.MODEL.TYPE:
-                    print(
-                        log_msg(
-                            "ERROR: model in checkpoint {} is different from current model {}".format,
-                            "ERROR",
-                        )
-                    )
-                    exit()
-            else:
+            if not cfg.EXPERIMENT.RESUME:
+                cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+                experiment_name = experiment_name + "_" + cur_time
+                self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
+                if not os.path.exists(self.log_path):
+                    os.makedirs(self.log_path)
+                save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
+                os.mkdir(os.path.join(self.log_path, "checkpoints"))
                 chosen_chkp = None
-                print(
-                    "Resume is True but no checkpoint path is given. Start from scratch."
-                )
-        else:
-            chosen_chkp = None
-            print("Start from scratch.")
+                logger.info("Start from scratch.")
+
+            # Choose here if you want to start training from a previous snapshot (None for new training)
+            else:
+                self.log_path = os.path.join(cfg.LOG.PREFIX, cfg.EXPERIMENT.CHECKPOINT)
+                if cfg.EXPERIMENT.CHECKPOINT != "":
+                    chkp_path = os.path.join(
+                        cfg.LOG.PREFIX, cfg.EXPERIMENT.CHECKPOINT, "checkpoints"
+                    )
+                    chkps = [f for f in os.listdir(chkp_path) if f[:4] == "chkp"]
+
+                    # Find which snapshot to restore
+                    if cfg.EXPERIMENT.CHKP_IDX is None:
+                        chosen_chkp = "current_chkp.tar"
+                    else:
+                        chosen_chkp = "epoch_{}_0_chkp.tar".format(
+                            cfg.EXPERIMENT.CHKP_IDX
+                        )
+                    chosen_chkp = os.path.join(
+                        cfg.LOG.PREFIX,
+                        cfg.EXPERIMENT.CHECKPOINT,
+                        "checkpoints",
+                        chosen_chkp,
+                    )
+
+                    print(log_msg("Loading model from {}".format(chosen_chkp), "INFO"))
+                    print(
+                        log_msg(
+                            "Current epoch: {}".format(cfg.EXPERIMENT.CHKP_IDX), "INFO"
+                        )
+                    )
+
+                    self.chkp = torch.load(chosen_chkp)
+                    self.model.load_state_dict(self.chkp["model_state_dict"])
+                    self.optimizer.load_state_dict(self.chkp["optimizer"])
+                    self.scheduler.load_state_dict(self.chkp["scheduler"])
+                    self.best_acc = self.chkp["best_acc"]
+                    self.best_epoch = self.chkp["epoch"]
+                    self.resume_epoch = self.chkp["epoch"]
+
+                    if self.chkp["dataset"] != cfg.DATASET.TYPE:
+                        print(
+                            log_msg(
+                                "ERROR: dataset in checkpoint is different from current dataset",
+                                "ERROR",
+                            )
+                        )
+                        exit()
+                    if self.chkp["model"] != cfg.MODEL.TYPE:
+                        print(
+                            log_msg(
+                                "ERROR: model in checkpoint {} is different from current model {}".format,
+                                "ERROR",
+                            )
+                        )
+                        exit()
+                else:
+                    chosen_chkp = None
+                    print(
+                        "Resume is True but no checkpoint path is given. Start from scratch."
+                    )
+            self.writer = SummaryWriter(os.path.join(self.log_path, "writer"))
+            logger.info("Log path: {}".format(self.log_path))
 
     def init_optimizer(self, cfg):
         if cfg.SOLVER.TYPE == "SGD":
@@ -171,15 +183,12 @@ class CurrentTrainer:
 
     def log(self, epoch, log_dict):
         if not self.cfg.EXPERIMENT.DEBUG:
-            import wandb
+            # import wandb
 
-            # wandb.log({"current lr": lr})
-            wandb.log(log_dict)
-        if log_dict["test_acc"] > self.best_acc:
-            self.best_acc = log_dict["test_acc"]
-            self.best_epoch = epoch
-            if not self.cfg.EXPERIMENT.DEBUG:
-                wandb.run.summary["best_acc"] = self.best_acc
+            # # wandb.log({"current lr": lr})
+            # wandb.log(log_dict)
+            self.writer.add_scalars("losses", log_dict, epoch)
+            pass
         # worklog.txt
         with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
             lines = ["epoch: {}\t".format(epoch)]
@@ -188,13 +197,21 @@ class CurrentTrainer:
             lines.append(os.linesep)
             writer.writelines(lines)
 
-    def log_imgs(self, epoch, imgs):
-        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
-            lines = ["epoch: {}\t".format(epoch)]
-            for k, v in log_dict.items():
-                lines.append("{}: {:.4f}\t".format(k, v))
-            lines.append(os.linesep)
-            writer.writelines(lines)
+    def log_imgs(self, epoch, it, imgs):
+        img_list = [
+            "x",
+            "aug_spec",
+            "aug_normal",
+            "rec_spec_batch_one",
+            "rec_spec_batch_two",
+            "rec_normal_batch_one",
+            "rec_normal_batch_two",
+        ]
+        img_path = os.path.join(self.log_path, "imgs")
+        current_epoch_path = os.path.join(img_path, "epoch_{}".format(epoch))
+        os.makedirs(current_epoch_path, exist_ok=True)
+        grid = make_grid(imgs, nrow=1)
+        self.writer.add_image("process_imgs", grid, global_step=epoch*len(self.train_loader) + it)
 
     def train(self, repetition_id=0):
         self.current_epoch = 0
@@ -246,11 +263,15 @@ class CurrentTrainer:
                 msg, imgs = self.before_warmup_iter(data, epoch, train_meters, idx)
                 pbar.set_description(log_msg(msg, "TRAIN"))
                 pbar.update()
+                if not self.cfg.EXPERIMENT.DEBUG:
+                    self.log_imgs(epoch, idx, imgs)
         else:
             for idx, data in enumerate(self.train_loader):
                 msg, imgs = self.after_warmup_iter(data, epoch, train_meters, idx)
                 pbar.set_description(log_msg(msg, "TRAIN"))
                 pbar.update()
+                if not self.cfg.EXPERIMENT.DEBUG:
+                    self.log_imgs(epoch, idx, imgs)
 
         # update lr
         # get current lr
@@ -277,8 +298,8 @@ class CurrentTrainer:
                 "loss_cls": train_meters["loss_cls"].avg,
             }
         )
-        self.log(epoch, log_dict)
-        self.log
+        if not self.cfg.EXPERIMENT.DEBUG:
+            self.log(epoch, log_dict)
         # saving checkpoint
         # saving occasional checkpoints
 
@@ -440,16 +461,16 @@ class CurrentTrainer:
 
         process_imgs = torch.cat(
             (
-                x,
-                aug_spec,
-                aug_normal,
-                rec_spec_batch_one,
-                rec_spec_batch_two,
-                rec_normal_batch_one,
-                rec_normal_batch_two,
+                x.unsqueeze(-1)[0],
+                aug_spec[0],
+                aug_normal[0],
+                rec_spec_batch_one[0],
+                rec_spec_batch_two[0],
+                rec_normal_batch_one[0],
+                rec_normal_batch_two[0],
             ),
-            0,
-        )[:3]
+            dim=0,
+        ).unsqueeze(1)
 
         return loss_total, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs
 

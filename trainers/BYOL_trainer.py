@@ -162,16 +162,9 @@ class BYOLTrainer:
         return scheduler
 
     def log(self, epoch, log_dict):
-        if not self.cfg.EXPERIMENT.DEBUG:
-            import wandb
-
-            # wandb.log({"current lr": lr})
-            wandb.log(log_dict)
         if log_dict["test_acc"] > self.best_acc:
             self.best_acc = log_dict["test_acc"]
             self.best_epoch = epoch
-            if not self.cfg.EXPERIMENT.DEBUG:
-                wandb.run.summary["best_acc"] = self.best_acc
         # worklog.txt
         with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
             lines = ["epoch: {}\t".format(epoch)]
