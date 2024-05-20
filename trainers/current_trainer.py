@@ -12,6 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from io import BytesIO
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 
 import getpass
 
@@ -207,11 +208,26 @@ class CurrentTrainer:
             "rec_normal_batch_one",
             "rec_normal_batch_two",
         ]
-        img_path = os.path.join(self.log_path, "imgs")
-        current_epoch_path = os.path.join(img_path, "epoch_{}".format(epoch))
-        os.makedirs(current_epoch_path, exist_ok=True)
-        grid = make_grid(imgs, nrow=1)
-        self.writer.add_image("process_imgs", grid, global_step=epoch*len(self.train_loader) + it)
+        imgs = imgs.squeeze()[:, ::10].cpu().detach().numpy()
+        fig, axes = plt.subplots(7, 1, figsize=(10, 15), sharex=True)
+        for i in range(7):
+            axes[i].plot(imgs[i], color="black")
+            axes[i].set_title(img_list[i])
+            axes[i].grid(True)
+        plt.tight_layout()
+
+        buf = BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close(fig)
+        buf.seek(0)
+        image = Image.open(buf).convert("L")
+        image_np = np.array(image)
+        self.writer.add_image(
+            "process_imgs",
+            image_np,
+            global_step=epoch * len(self.train_loader) + it,
+            dataformats="HW",
+        )
 
     def train(self, repetition_id=0):
         self.current_epoch = 0
@@ -263,14 +279,14 @@ class CurrentTrainer:
                 msg, imgs = self.before_warmup_iter(data, epoch, train_meters, idx)
                 pbar.set_description(log_msg(msg, "TRAIN"))
                 pbar.update()
-                if not self.cfg.EXPERIMENT.DEBUG:
+                if not self.cfg.EXPERIMENT.DEBUG and self.cfg.EXPERIMENT.LOG_IMAGES:
                     self.log_imgs(epoch, idx, imgs)
         else:
             for idx, data in enumerate(self.train_loader):
                 msg, imgs = self.after_warmup_iter(data, epoch, train_meters, idx)
                 pbar.set_description(log_msg(msg, "TRAIN"))
                 pbar.update()
-                if not self.cfg.EXPERIMENT.DEBUG:
+                if not self.cfg.EXPERIMENT.DEBUG and self.cfg.EXPERIMENT.LOG_IMAGES:
                     self.log_imgs(epoch, idx, imgs)
 
         # update lr

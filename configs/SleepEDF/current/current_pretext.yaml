@@ -3,6 +3,7 @@ EXPERIMENT:
   TAG: "proposed"
   PROJECT: "proposed project"
   DEBUG: False 
+  LOG_IMAGES: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training
@@ -35,7 +36,7 @@ MODEL:
       # SOURCE_CHANNELS: 36
 SOLVER:
   TRAINER: "current"
-  BATCH_SIZE: 100
+  BATCH_SIZE: 400
   EPOCHS: 300
   LR: 0.001
   SCHEDULER:

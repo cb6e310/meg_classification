@@ -34,7 +34,7 @@ CFG = CN()
 #   - config.yaml
 
 # Experiment
-CFG.EXPERIMENT = CN()
+CFG.EXPERIMENT = CN(new_allowed=True)
 CFG.EXPERIMENT.PROJECT = ""
 CFG.EXPERIMENT.NAME = ""
 CFG.EXPERIMENT.TAG = "default"
