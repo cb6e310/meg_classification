@@ -782,10 +782,10 @@ class CurrentCLR(BaseNet):
             )
 
         elif step == "rec":
-            normal_inv_representation, normal_acs_representation = self.online_encoder(
+            _, normal_inv_representation, normal_acs_representation = self.online_encoder(
                 rec_batch_view_normal, return_projection=False
             )
-            spec_inv_representation, spec_acs_representation = self.online_encoder(
+            _, spec_inv_representation, spec_acs_representation = self.online_encoder(
                 rec_batch_view_spec, return_projection=False
             )
 
@@ -824,7 +824,7 @@ class CurrentCLR(BaseNet):
             pass
 
         elif step == "cls":
-            _, cls_representation = self.online_encoder(
+            _,_, cls_representation = self.online_encoder(
                 cls_batch_view, return_projection=False
             )
             cls_logits = self.cls_fc(cls_representation)

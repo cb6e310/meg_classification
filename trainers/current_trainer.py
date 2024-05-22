@@ -536,6 +536,7 @@ class CurrentTrainer:
         loss_cls = self.cls_criterion(cls_online_pred, labels)
 
         loss_cls = loss_cls.mean()
+        loss_cls = loss_cls*self.cfg.MODEL.ARGS.CLS_WEIGHT
 
         # backward
         self.optimizer.zero_grad()
