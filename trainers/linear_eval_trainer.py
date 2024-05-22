@@ -161,15 +161,14 @@ class LinearEvalTrainer:
 
     def log(self, epoch, log_dict):
         if not self.cfg.EXPERIMENT.DEBUG:
-            import wandb
+            # import wandb
 
-            # wandb.log({"current lr": lr})
-            wandb.log(log_dict)
+            # # wandb.log({"current lr": lr})
+            # wandb.log(log_dict)
+            pass
         if log_dict["test_acc"] > self.best_acc:
             self.best_acc = log_dict["test_acc"]
             self.best_epoch = epoch
-            if not self.cfg.EXPERIMENT.DEBUG:
-                wandb.run.summary["best_acc"] = self.best_acc
         # worklog.txt
         with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
             lines = ["epoch: {}\t".format(epoch)]
@@ -197,7 +196,7 @@ class LinearEvalTrainer:
             #     x = torch.unsqueeze(x, -1)
             with torch.no_grad():
                 if self.cfg.MODEL.ARGS.BACKBONE == "eegconvnet":
-                    h = self.model(x, x, return_embedding=True, return_projection=False)[0]
+                    h = self.model(x, x, return_embedding=True, return_projection=False)[1]
             h = h.detach()
 
             feature_vector.extend(h.cpu().detach().numpy())

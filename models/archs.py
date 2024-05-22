@@ -737,7 +737,7 @@ class CurrentCLR(BaseNet):
 
     def forward(
         self,
-        step,
+        step=None,
         clr_batch_view_1=None,
         clr_batch_view_2=None,
         rec_batch_view_spec=None,
@@ -829,3 +829,8 @@ class CurrentCLR(BaseNet):
             )
             cls_logits = self.cls_fc(cls_representation)
             return cls_logits
+
+        else:
+            # linear evaluation
+            if return_embedding:
+                return self.online_encoder(clr_batch_view_1, return_projection=False)
