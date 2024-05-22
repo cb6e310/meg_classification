@@ -563,7 +563,7 @@ class CurrentNetWrapper(nn.Module):
         net,
         projection_size,
         projection_hidden_size,
-        layer=-2,
+        layer=-1,
         use_simsiam_mlp=False,
         sync_batchnorm=None,
         simple=False,
@@ -633,12 +633,12 @@ class CurrentNetWrapper(nn.Module):
 
     def forward(self, x, return_projection=True):
         representations = self.get_representation(x)
-        # representation = representations[0]
+        representation = representations[0]
         inv_representation = representations[1]
         acs_representation = representations[2]
         # logger.debug(representation.shape)
         if not return_projection:
-            return inv_representation, acs_representation
+            return representation, inv_representation, acs_representation
 
         projector = self._get_projector(inv_representation)
         projection = projector(inv_representation)

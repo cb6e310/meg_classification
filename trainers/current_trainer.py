@@ -353,7 +353,8 @@ class CurrentTrainer:
         train_start_time = time.time()
         x, _, _ = data
         batch_size = x.size(0)
-
+        loss_clr=0
+        loss_cls=0
         loss_total_rec, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = (
             self.rec_step(x)
         )
