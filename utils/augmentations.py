@@ -28,7 +28,7 @@ class AutoAUG(Module):
 
         self.normal_augs_wo_spec = [
             timeshift(),
-            scaling(),
+            cutout(),
             window_warp(),
         ]
 
@@ -57,11 +57,10 @@ class AutoAUG(Module):
             aug2 = aug2.transpose(1,2)
             return aug1, aug2
         elif step == "rec":
-            spec_transform = Compose([jitter(), cutout()])
-            transform = Compose([scaling()])
-            aug = spec_transform(x)
-            aug1 = transform(aug)
-            aug2 = transform(x)
+            spec_transform = Compose([scaling()])
+            # transform = Compose([scaling()])
+            aug1 = spec_transform(x)
+            aug2 = x
             aug1 = aug1.transpose(1,2)
             aug2 = aug2.transpose(1,2)
 
