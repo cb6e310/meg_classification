@@ -8,6 +8,7 @@ EXPERIMENT:
   RESUME : False # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  CHECKPOINT_GAP: 10
 DATASET:
   ROOT: "/home/song/datasets/EEG"
   TYPE: "sleepedf20"
@@ -33,7 +34,7 @@ MODEL:
 SOLVER:
   TRAINER: "BYOL"
   BATCH_SIZE: 512
-  EPOCHS: 300
+  EPOCHS: 10
   LR: 0.0001
   SCHEDULER:
     TYPE: "ExponentialLR"
