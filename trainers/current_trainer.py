@@ -353,15 +353,15 @@ class CurrentTrainer:
         train_start_time = time.time()
         x, _, _ = data
         batch_size = x.size(0)
-        loss_clr=0
-        loss_cls=0
+        loss_clr=torch.tensor(0 ,dtype=torch.float32).cuda()
+        loss_cls=torch.tensor(0 ,dtype=torch.float32).cuda()
         loss_total_rec, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = (
             self.rec_step(x)
         )
 
         loss_clr = self.clr_step(x)
 
-        loss_cls = self.cls_step(x)
+        # loss_cls = self.cls_step(x)
 
         loss_total = loss_clr + loss_cls + loss_total_rec
 

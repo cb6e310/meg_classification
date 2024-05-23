@@ -252,6 +252,7 @@ class ConvGenerator(nn.Module):
 
     def forward(self, x1, x2):
         x = torch.cat((x1, x2), dim=1)
+        x = F.normalize(x, dim=1)
         
         x = self.fc(x)
         

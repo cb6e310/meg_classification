@@ -37,7 +37,7 @@ MODEL:
 SOLVER:
   TRAINER: "current"
   BATCH_SIZE: 512
-  EPOCHS: 300
+  EPOCHS: 10
   LR: 0.001
   SCHEDULER:
     TYPE: "ExponentialLR"
