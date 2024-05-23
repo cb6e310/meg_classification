@@ -355,9 +355,15 @@ class CurrentTrainer:
         batch_size = x.size(0)
         loss_clr=torch.tensor(0 ,dtype=torch.float32).cuda()
         loss_cls=torch.tensor(0 ,dtype=torch.float32).cuda()
-        loss_total_rec, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = (
-            self.rec_step(x)
-        )
+        loss_rec_spec=torch.tensor(0 ,dtype=torch.float32).cuda()
+        loss_rec_normal=torch.tensor(0 ,dtype=torch.float32).cuda()
+        loss_total_rec=torch.tensor(0 ,dtype=torch.float32).cuda()
+        loss_orthogonal=torch.tensor(0 ,dtype=torch.float32).cuda()
+        process_imgs = torch.tensor(0 ,dtype=torch.float32).cuda()
+        # loss_total_rec, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = (
+        #     self.rec_step(x)
+        # )
+
 
         loss_clr = self.clr_step(x)
 
@@ -468,7 +474,6 @@ class CurrentTrainer:
 
         loss_total = (
             self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_spec + loss_rec_normal)
-            + loss_orthogonal
         )
 
         # backward
