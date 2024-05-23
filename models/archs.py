@@ -278,7 +278,6 @@ class BYOL(nn.Module):
 
         # send a mock image tensor to instantiate singleton parameters
         self.forward(
-            
             torch.randn(1, channels, feature_size, 1, device=device),
             torch.randn(1, channels, feature_size, 1, device=device),
         )
@@ -696,7 +695,12 @@ class CurrentCLR(BaseNet):
             projection_size, projection_size, projection_hidden_size, simple=simple
         )
 
-        self.decoder = ConvGenerator(
+        # self.decoder = ConvGenerator(
+        #     input_dim=projection_size,
+        #     output_channels=channels,
+        #     output_length=feature_size,
+        # )
+        self.decoder = Generator(
             input_dim=projection_size,
             output_channels=channels,
             output_length=feature_size,
@@ -805,10 +809,10 @@ class CurrentCLR(BaseNet):
                 spec_inv_representation, normal_acs_representation
             )
 
-            rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
-            rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
-            rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
-            rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
+            # rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
+            # rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
+            # rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
+            # rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
 
             return (
                 rec_spec_batch_one,
@@ -824,7 +828,7 @@ class CurrentCLR(BaseNet):
             pass
 
         elif step == "cls":
-            _,_, cls_representation = self.online_encoder(
+            _, _, cls_representation = self.online_encoder(
                 cls_batch_view, return_projection=False
             )
             cls_logits = self.cls_fc(cls_representation)

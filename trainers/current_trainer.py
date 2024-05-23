@@ -182,15 +182,18 @@ class CurrentTrainer:
             raise NotImplementedError(cfg.SOLVER.SCHEDULER.TYPE)
         return scheduler
 
-    def log(self, epoch, log_dict):
-        if not self.cfg.EXPERIMENT.DEBUG:
-            # import wandb
+    def log(self, epoch, it, log_dict):
+        # import wandb
 
-            # # wandb.log({"current lr": lr})
-            # wandb.log(log_dict)
-            self.writer.add_scalars("losses", log_dict, epoch)
-            pass
-        # worklog.txt
+        # # wandb.log({"current lr": lr})
+        # wandb.log(log_dict)
+        # resolve log_dict
+        log_dict = {k: v.avg for k, v in log_dict.items()}
+        self.writer.add_scalars(
+            "losses", log_dict, global_step=epoch * len(self.train_loader) + it
+        )
+
+    def log_worklog(self, epoch, log_dict):
         with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
             lines = ["epoch: {}\t".format(epoch)]
             for k, v in log_dict.items():
@@ -216,17 +219,16 @@ class CurrentTrainer:
             axes[i].grid(True)
         plt.tight_layout()
 
-        buf = BytesIO()
-        plt.savefig(buf, format="png")
-        plt.close(fig)
-        buf.seek(0)
-        image = Image.open(buf).convert("L")
-        image_np = np.array(image)
-        self.writer.add_image(
+        # buf = BytesIO()
+        # plt.savefig(buf, format="png")
+        # plt.close(fig)
+        # buf.seek(0)
+        # image = Image.open(buf).convert("L")
+        # image_np = np.array(image)
+        self.writer.add_figure(
             "process_imgs",
-            image_np,
+            plt.gcf(),
             global_step=epoch * len(self.train_loader) + it,
-            dataformats="HW",
         )
 
     def train(self, repetition_id=0):
@@ -279,15 +281,19 @@ class CurrentTrainer:
                 msg, imgs = self.before_warmup_iter(data, epoch, train_meters, idx)
                 pbar.set_description(log_msg(msg, "TRAIN"))
                 pbar.update()
-                if not self.cfg.EXPERIMENT.DEBUG and self.cfg.EXPERIMENT.LOG_IMAGES:
-                    self.log_imgs(epoch, idx, imgs)
+                if not self.cfg.EXPERIMENT.DEBUG:
+                    self.log(epoch, idx, train_meters)
+                    if self.cfg.EXPERIMENT.LOG_IMAGES:
+                        self.log_imgs(epoch, idx, imgs)
         else:
             for idx, data in enumerate(self.train_loader):
                 msg, imgs = self.after_warmup_iter(data, epoch, train_meters, idx)
                 pbar.set_description(log_msg(msg, "TRAIN"))
                 pbar.update()
-                if not self.cfg.EXPERIMENT.DEBUG and self.cfg.EXPERIMENT.LOG_IMAGES:
-                    self.log_imgs(epoch, idx, imgs)
+                if not self.cfg.EXPERIMENT.DEBUG:
+                    self.log(epoch, idx, train_meters)
+                    if self.cfg.EXPERIMENT.LOG_IMAGES:
+                        self.log_imgs(epoch, idx, imgs)
 
         # update lr
         # get current lr
@@ -315,7 +321,7 @@ class CurrentTrainer:
             }
         )
         if not self.cfg.EXPERIMENT.DEBUG:
-            self.log(epoch, log_dict)
+            self.log_worklog(epoch, log_dict)
         # saving checkpoint
         # saving occasional checkpoints
 
@@ -353,17 +359,18 @@ class CurrentTrainer:
         train_start_time = time.time()
         x, _, _ = data
         batch_size = x.size(0)
-        loss_clr=torch.tensor(0 ,dtype=torch.float32).cuda()
-        loss_cls=torch.tensor(0 ,dtype=torch.float32).cuda()
-        loss_rec_spec=torch.tensor(0 ,dtype=torch.float32).cuda()
-        loss_rec_normal=torch.tensor(0 ,dtype=torch.float32).cuda()
-        loss_total_rec=torch.tensor(0 ,dtype=torch.float32).cuda()
-        loss_orthogonal=torch.tensor(0 ,dtype=torch.float32).cuda()
-        process_imgs = torch.tensor(0 ,dtype=torch.float32).cuda()
-        # loss_total_rec, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = (
-        #     self.rec_step(x)
-        # )
+        loss_clr = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_cls = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_rec_spec = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_rec_normal = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_total_rec = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_orthogonal = torch.tensor(0, dtype=torch.float32).cuda()
+        process_imgs = torch.tensor(0, dtype=torch.float32).cuda()
+        _, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = self.rec_step(
+            x
+        )
 
+        loss_total_rec = loss_rec_spec + loss_rec_normal
 
         loss_clr = self.clr_step(x)
 
@@ -474,6 +481,7 @@ class CurrentTrainer:
 
         loss_total = (
             self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_spec + loss_rec_normal)
+            + loss_orthogonal
         )
 
         # backward
@@ -541,7 +549,7 @@ class CurrentTrainer:
         loss_cls = self.cls_criterion(cls_online_pred, labels)
 
         loss_cls = loss_cls.mean()
-        loss_cls = loss_cls*self.cfg.MODEL.ARGS.CLS_WEIGHT
+        loss_cls = loss_cls * self.cfg.MODEL.ARGS.CLS_WEIGHT
 
         # backward
         self.optimizer.zero_grad()
