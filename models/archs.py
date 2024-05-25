@@ -466,9 +466,12 @@ class EEGConvNetBackbone(nn.Module):
         self.bn = nn.BatchNorm2d(64)
         self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        self.block1 = ResidualBlock(64, 256)
-        self.block2 = ResidualBlock(256, 256)
-        self.block3 = ResidualBlock(256, 256)
+        self.block1 = ResidualBlock(64, 256, stride=1)
+        self.block2 = ResidualBlock(256, 256, stride=1)
+        self.block3 = ResidualBlock(256, 256, stride=1)
+        # self.block1 = ResidualBlock(64, 256)
+        # self.block2 = ResidualBlock(256, 256)
+        # self.block3 = ResidualBlock(256, 256)
         self.block4 = ResidualBlock(256, 256)
         self.view = TensorView()
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
@@ -484,17 +487,17 @@ class EEGConvNetBackbone(nn.Module):
         x = self.block3(x)
         x = self.block4(x)
         out_inv = self.dist_inv_head(x)
-        out_inv = self.avg_pool(out_inv)
-        out_inv = self.view(out_inv)
+        out_inv_g = self.avg_pool(out_inv)
+        out_inv_g = self.view(out_inv_g)
 
         out_acs = self.dist_acs_head(x)
-        out_acs = self.avg_pool(out_acs)
-        out_acs = self.view(out_acs)
+        out_acs_g = self.avg_pool(out_acs)
+        out_acs_g = self.view(out_acs_g)
 
         x = self.avg_pool(x)
         out = self.view(x)
 
-        return out, out_inv, out_acs
+        return out, (out_inv, out_inv_g), (out_acs, out_acs_g)
 
 
 class SimCLR(BaseNet):
@@ -633,15 +636,17 @@ class CurrentNetWrapper(nn.Module):
     def forward(self, x, return_projection=True):
         representations = self.get_representation(x)
         representation = representations[0]
-        inv_representation = representations[1]
-        acs_representation = representations[2]
+        inv4rec = representations[1][0]
+        inv4clr = representations[1][1]
+        acs4rec = representations[2][0]
+        acs4clr = representations[2][1]
         # logger.debug(representation.shape)
         if not return_projection:
-            return representation, inv_representation, acs_representation
+            return representation, inv4rec, acs4rec
 
-        projector = self._get_projector(inv_representation)
-        projection = projector(inv_representation)
-        return projection, inv_representation
+        projector = self._get_projector(inv4clr)
+        projection = projector(inv4clr)
+        return projection
 
 
 class CurrentCLR(BaseNet):
@@ -700,12 +705,18 @@ class CurrentCLR(BaseNet):
         #     output_channels=channels,
         #     output_length=feature_size,
         # )
-        self.decoder = Generator(
-            input_dim=projection_size,
-            output_channels=channels,
-            output_length=feature_size,
+        # self.decoder = Generator(
+        #     input_dim=projection_size,
+        #     output_channels=channels,
+        #     output_length=feature_size,
+        # )
+        # self.decoder = ConvDecoder(
+        #     input_dim=projection_size*2,
+        #     output_dim=feature_size
+        # )
+        self.decoder = ConvDecoder(
+            filter_size=3, channels=channels, length=feature_size
         )
-
         self.cls_fc = nn.Linear(projection_size, cfg.DATASET.NUM_CLASSES)
 
         # get device of network and make wrapper same device
@@ -751,6 +762,7 @@ class CurrentCLR(BaseNet):
         return_embedding=False,
         return_projection=True,
     ):
+
         # assert not (
         #     self.training and batch_view_1.shape[0] == 1
         # ), "you must have greater than 1 sample when training, due to the batchnorm in the projection layer"
@@ -761,7 +773,7 @@ class CurrentCLR(BaseNet):
 
             views = torch.cat((clr_batch_view_1, clr_batch_view_2), dim=0)
 
-            online_projections, _ = self.online_encoder(views, return_projection=True)
+            online_projections = self.online_encoder(views, return_projection=True)
             online_predictions = self.online_predictor(online_projections)
 
             online_pred_one, online_pred_two = online_predictions.chunk(2, dim=0)
@@ -809,10 +821,10 @@ class CurrentCLR(BaseNet):
                 spec_inv_representation, normal_acs_representation
             )
 
-            # rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
-            # rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
-            # rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
-            # rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
+            rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
+            rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
+            rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
+            rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
 
             return (
                 rec_spec_batch_one,

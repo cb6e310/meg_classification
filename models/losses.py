@@ -265,6 +265,8 @@ class OrthLoss(nn.Module):
 
     def forward(self, input1, input2):
         # Zero mean
+        # input1 = torch.flatten(input1, start_dim=1)
+        # input2 = torch.flatten(input2, start_dim=1)
         input1_mean = torch.mean(input1, dim=0, keepdims=True)
         input2_mean = torch.mean(input2, dim=0, keepdims=True)
         input1 = input1 - input1_mean

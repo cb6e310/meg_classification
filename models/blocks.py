@@ -232,218 +232,44 @@ class DilatedConvEncoder(nn.Module):
         return self.net(x)
 
 
-class ConvGenerator(nn.Module):
-    def __init__(self, input_dim, output_channels, output_length):
-        super(ConvGenerator, self).__init__()
-
-        self.fc = nn.Linear(input_dim * 2, 1024)
-
-        self.conv1 = nn.Conv1d(1024, 512, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv1d(512, 256, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv1d(256, output_channels, kernel_size=3, padding=1)
-
-        self.norm1 = nn.BatchNorm1d(512)
-        self.norm2 = nn.BatchNorm1d(256)
-
-        self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
-        self.output_length = output_length
-
-    def forward(self, x1, x2):
-        x = torch.cat((x1, x2), dim=1)
-        x = F.normalize(x, dim=1)
-
-        x = self.fc(x)
-
-        x = x.unsqueeze(2)
-
-        x = self.relu(self.norm1(self.conv1(x)))
-        x = self.relu(self.norm2(self.conv2(x)))
-        x = self.tanh(self.conv3(x))
-
-        x = nn.functional.interpolate(
-            x, size=self.output_length, mode="linear", align_corners=True
-        )
-
-        return x.squeeze(2)
-
-class TimeSeriesAutoencoder(nn.Module):
-    def __init__(self, input_dim, hidden_dims, output_length):
-        super(TimeSeriesAutoencoder, self).__init__()
-
-        self.decoder_fc = nn.Linear(input_dim, hidden_dims)  
-        self.decoder_conv1 = nn.ConvTranspose1d(hidden_dims, hidden_dims // 2, kernel_size=5, stride=2, padding=2, output_padding=1)
-        self.decoder_conv2 = nn.ConvTranspose1d(hidden_dims // 2, output_length, kernel_size=5, stride=2, padding=2, output_padding=1)
-        
-        self.relu = nn.ReLU()
-        self.tanh = nn.Tanh() 
-
-    def forward(self, x1, x2):
-        encoded_features = torch.cat((x1, x2), dim=1)
-        x = F.normalize(encoded_features, dim=1)
-        x = self.relu(self.decoder_fc(encoded_features))
-        x = x.unsqueeze(2)  
-        x = self.relu(self.decoder_conv1(x))
-        x = self.decoder_conv2(x)
-        return self.tanh(x).squeeze() 
-
-class Generator(nn.Module):
-    def __init__(self, input_dim, output_channels, output_length):
-        super(Generator, self).__init__()
-        self.fc = nn.Linear(input_dim*2, 512)
-
-        # Up-sampling and Conv layers, adjusted to match the desired output dimensions
-        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-        self.conv1 = nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1)
-        self.conv4 = nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1)
-        self.conv5 = nn.Conv2d(32, 16, kernel_size=3, stride=1, padding=1)
-        self.conv6 = nn.Conv2d(16, 8, kernel_size=3, stride=1, padding=1)
-        self.final_conv = nn.Conv2d(8, output_channels, kernel_size=3, stride=1, padding=1)
-
-        # Batch normalization layers
-        self.norm1 = nn.BatchNorm2d(256)
-        self.norm2 = nn.BatchNorm2d(128)
-        self.norm3 = nn.BatchNorm2d(64)
-        self.norm4 = nn.BatchNorm2d(32)
-        self.norm5 = nn.BatchNorm2d(16)
-        self.norm6 = nn.BatchNorm2d(8)
-
-        # Activation functions
-        self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
-
-        self.output_length = output_length
-
-    def forward(self, x1, x2):
-        x = torch.cat((x1, x2), dim=1)
-        x = F.normalize(x, dim=1)
-        x = self.fc(x)
-        x = x.view(-1, 512, 1, 1)  # Reshape to match the dimensions for convolutions
-        x = self.up(x)
-        x = self.relu(self.norm1(self.conv1(x)))
-        x = self.up(x)
-        x = self.relu(self.norm2(self.conv2(x)))
-        x = self.up(x)
-        x = self.relu(self.norm3(self.conv3(x)))
-        x = self.up(x)
-        x = self.relu(self.norm4(self.conv4(x)))
-        x = self.up(x)
-        x = self.relu(self.norm5(self.conv5(x)))
-        x = self.up(x)
-        x = self.relu(self.norm6(self.conv6(x)))
-        x = self.final_conv(x)
-        x = F.interpolate(x, size=(self.output_length, 1), mode='nearest')  # Adjust the size to [batchsize, 1, 3000, 1]
-        return self.tanh(x)
-
-
-# class Generator(nn.Module):
-#     def __init__(self, input_dim, output_channels, output_length):
-#         super(Generator, self).__init__()
-#         self.fc = nn.Linear(input_dim*2, 512)
-
-#         # Up-sampling and Conv layers, adjusted to match the desired output dimensions
-#         self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-#         self.conv1 = nn.Conv2d(512, 128, kernel_size=3, stride=1, padding=1)
-#         self.conv3 = nn.Conv2d(128, 32, kernel_size=3, stride=1, padding=1)
-#         self.conv5 = nn.Conv2d(32, 8, kernel_size=3, stride=1, padding=1)
-#         self.final_conv = nn.Conv2d(8, output_channels, kernel_size=3, stride=1, padding=1)
-
-#         # Batch normalization layers
-#         self.norm2 = nn.BatchNorm2d(128)
-#         self.norm4 = nn.BatchNorm2d(32)
-#         self.norm6 = nn.BatchNorm2d(8)
-
-#         # Activation functions
-#         self.relu = nn.ReLU()
-#         self.tanh = nn.Tanh()
-#         self.output_length = output_length
-
-#     def forward(self, x1, x2):
-#         x = torch.cat((x1, x2), dim=1)
-#         x = F.normalize(x, dim=1)
-#         x = self.fc(x)
-#         x = x.view(-1, 512, 1, 1)  # Reshape to match the dimensions for convolutions
-
-#         x = self.up(x)
-#         x = self.relu(self.norm2(self.conv1(x)))
-#         x = self.up(x)
-#         x = self.relu(self.norm4(self.conv3(x)))
-#         x = self.up(x)
-#         x = self.relu(self.norm6(self.conv5(x)))
-#         x = self.final_conv(x)
-
-#         x = F.interpolate(x, size=(self.output_length, 1), mode='nearest')  # Adjust the size to [batchsize, 1, 3000, 1]
-#         return self.tanh(x)
-
-class GeneratorSimple(nn.Module):
-    def __init__(self):
-        super(GeneratorSimple, self).__init__()
-        self.fc = nn.Linear(512, 256)  # 减少输出特征数量
-
-        # 简化上采样和卷积层
-        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-        self.conv1 = nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1)
-        self.final_conv = nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
-
-        # 减少批量归一化层
-        self.norm1 = nn.BatchNorm2d(128)
-        self.norm2 = nn.BatchNorm2d(64)
-
-        # 激活函数
-        self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
+class UpSampling1DNet(nn.Module):
+    def __init__(self, scale_factor):
+        super(UpSampling1DNet, self).__init__()
+        self.scale_factor = scale_factor
 
     def forward(self, x):
-        x = self.fc(x)
-        x = x.view(-1, 256, 1, 1)  # 适应卷积的维度需求
-        x = self.up(x)
-        x = self.relu(self.norm1(self.conv1(x)))
-        x = self.up(x)
-        x = self.relu(self.norm2(self.conv2(x)))
-        x = self.up(x)  # 进行额外的上采样以达到目标长度
-        x = self.final_conv(x)
-        x = F.interpolate(x, size=(3000, 1), mode='nearest')  # 调整大小至[batchsize, 1, 3000, 1]
-        return self.tanh(x)
+        return F.interpolate(
+            x, scale_factor=self.scale_factor, mode="linear", align_corners=False
+        )
 
-# class ConvDecoder(nn.Module):
-#     def __init__(self, input_dim, output_channels, output_length):
-#         super(ConvDecoder, self).__init__()
-#         self.output_length = output_length
 
-#         self.fc = nn.Linear(input_dim * 2, input_dim)
+class ConvDecoder(nn.Module):
+    def __init__(self, filter_size, channels=1, length=3000):
+        super(ConvDecoder, self).__init__()
 
-#         self.conv1 = nn.Conv1d(
-#             in_channels=input_dim, out_channels=input_dim * 2, kernel_size=3, padding=1
-#         )
-#         self.conv2 = nn.Conv1d(
-#             in_channels=input_dim * 2,
-#             out_channels=output_channels,
-#             kernel_size=3,
-#             padding=1,
-#         )
+        self.decoder = nn.Sequential(
+            nn.Conv1d(256, 256, kernel_size=filter_size, padding="same"),
+            nn.ReLU(),
+            UpSampling1DNet(scale_factor=2),
+            nn.Conv1d(256, 128, kernel_size=filter_size, padding="same"),
+            nn.ReLU(),
+            UpSampling1DNet(scale_factor=2),
+            nn.Conv1d(128, 64, kernel_size=filter_size, padding="same"),
+            nn.ReLU(),
+            UpSampling1DNet(scale_factor=2),
+            nn.Conv1d(64, 32, kernel_size=filter_size, padding="same"),
+            nn.ReLU(),
+            UpSampling1DNet(scale_factor=2),
+            nn.Conv1d(32, channels, kernel_size=filter_size, padding="same"),
+        )
 
-#         self.adjust_length = nn.Conv1d(
-#             in_channels=output_channels, out_channels=output_channels, kernel_size=1
-#         )
+        self.length = length
 
-#     def forward(self, x1, x2):
-#         # x = torch.cat((x1, x2), dim=1)
-#         x = F.normalize(torch.cat((x1 , x2), dim=1), dim=1)
-
-#         x = self.fc(x)
-
-#         x = x.unsqueeze(2)
-
-#         x = torch.relu(self.conv1(x))
-#         x = torch.relu(self.conv2(x))
-
-#         if x.shape[2] < self.output_length:
-#             x = nn.functional.interpolate(
-#                 x, size=self.output_length, mode="linear", align_corners=True
-#             )
-#         x = self.adjust_length(x)
-
-#         return x
+    def forward(self, x1, x2):
+        encoded = F.normalize(x1 + x2, dim=1)
+        encoded = torch.squeeze(encoded)
+        decoded = self.decoder(encoded)
+        decoded = F.interpolate(
+            decoded, size=self.length, mode="linear", align_corners=False
+        )
+        return decoded
