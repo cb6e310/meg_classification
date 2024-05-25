@@ -785,7 +785,7 @@ class CurrentCLR(BaseNet):
                     else self.online_encoder
                 )
 
-                target_projections, _ = target_encoder(views)
+                target_projections = target_encoder(views)
                 target_projections = target_projections.detach()
 
                 target_proj_one, target_proj_two = target_projections.chunk(2, dim=0)

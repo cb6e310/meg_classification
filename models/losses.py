@@ -267,6 +267,10 @@ class OrthLoss(nn.Module):
         # Zero mean
         # input1 = torch.flatten(input1, start_dim=1)
         # input2 = torch.flatten(input2, start_dim=1)
+        input1 = F.adaptive_avg_pool2d(input1, (1, 1)).squeeze()
+        input2 = F.adaptive_avg_pool2d(input2, (1, 1)).squeeze()
+        input1 = torch.squeeze(input1)
+        input2 = torch.squeeze(input2)
         input1_mean = torch.mean(input1, dim=0, keepdims=True)
         input2_mean = torch.mean(input2, dim=0, keepdims=True)
         input1 = input1 - input1_mean

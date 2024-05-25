@@ -372,7 +372,7 @@ class CurrentTrainer:
 
         loss_total_rec = loss_rec_spec + loss_rec_normal
 
-        # loss_clr = self.clr_step(x)
+        loss_clr = self.clr_step(x)
 
         # loss_cls = self.cls_step(x)
 
