@@ -89,6 +89,9 @@ class AutoAUG(Module):
             aug1 = transform(x)
             aug1 = aug1.transpose(1,2)
             return aug1, labels
+
+        elif step == "pred":
+            pass
         
         else:
             raise ValueError("step should be one of 'clr', 'rec', 'cls'")

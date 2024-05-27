@@ -559,3 +559,27 @@ class CurrentTrainer:
         self.optimizer.step()
 
         return loss_cls
+
+    def pred_step(self, x):
+        # pred step
+        self.optimizer.zero_grad()
+        x = x.float().cuda()
+        x = torch.squeeze(x, -1)
+        aug, labels = self.aug(x, step="pred")
+        aug = aug.unsqueeze(-1).cuda()
+        labels = labels.cuda()
+
+        # forward
+        pred_online_pred = self.model(step="pred", cls_batch_view=aug)
+
+        loss_pred = self.cls_criterion(pred_online_pred, labels)
+
+        loss_pred = loss_pred.mean()
+        loss_pred = loss_pred * self.cfg.MODEL.ARGS.CLS_WEIGHT
+
+        # backward
+        self.optimizer.zero_grad()
+        loss_pred.backward()
+        self.optimizer.step()
+
+        return loss_pred

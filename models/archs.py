@@ -719,6 +719,18 @@ class CurrentCLR(BaseNet):
         )
         self.cls_fc = nn.Linear(projection_size, cfg.DATASET.NUM_CLASSES)
 
+        # regressive head
+        self.pred_fc = nn.Sequential(
+            nn.Linear(projection_size, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Linear(64, 1),
+        )
+
+
         # get device of network and make wrapper same device
         device = get_module_device(self.net)
         self.to(device)
@@ -758,7 +770,7 @@ class CurrentCLR(BaseNet):
         rec_batch_view_spec=None,
         rec_batch_view_normal=None,
         cls_batch_view=None,
-        cls_labels=None,
+        pred_batch_view=None,
         return_embedding=False,
         return_projection=True,
     ):
@@ -827,9 +839,9 @@ class CurrentCLR(BaseNet):
             rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
 
             return (
-                # rec_spec_batch_one,
+                rec_spec_batch_one,
                 rec_spec_batch_two,
-                # rec_normal_batch_one,
+                rec_normal_batch_one,
                 rec_normal_batch_two,
                 normal_inv_representation,
                 spec_inv_representation,
@@ -845,6 +857,14 @@ class CurrentCLR(BaseNet):
             )
             cls_logits = self.cls_fc(cls_representation)
             return cls_logits
+
+
+        elif step == "pred":
+            _, _, pred_representation = self.online_encoder(
+                pred_batch_view, return_projection=False
+            )
+            pred_output = self.pred_fc(pred_representation)
+            return pred_output
 
         else:
             # linear evaluation
