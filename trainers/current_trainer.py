@@ -114,7 +114,7 @@ class CurrentTrainer:
                     self.model.load_state_dict(self.chkp["model_state_dict"])
                     self.optimizer.load_state_dict(self.chkp["optimizer"])
                     self.scheduler.load_state_dict(self.chkp["scheduler"])
-                    self.best_acc = self.chkp["best_acc"]
+                    # self.best_acc = self.chkp["best_acc"]
                     self.best_epoch = self.chkp["epoch"]
                     self.resume_epoch = self.chkp["epoch"]
 
@@ -469,11 +469,13 @@ class CurrentTrainer:
 
         loss_rec_spec = self.rec_criterion(
             rec_spec_batch_one, aug_spec
-        ) + self.rec_criterion(rec_spec_batch_two, aug_spec)
+        ) 
+        + self.rec_criterion(rec_spec_batch_two, aug_spec)
 
         loss_rec_normal = self.rec_criterion(
             rec_normal_batch_one, aug_normal
-        ) + self.rec_criterion(rec_normal_batch_two, aug_normal)
+        ) 
+        + self.rec_criterion(rec_normal_batch_two, aug_normal)
 
         loss_orthogonal = self.orthogonal_criterion(
             normal_inv_representation, normal_cs_representation
@@ -494,9 +496,9 @@ class CurrentTrainer:
                 x.unsqueeze(-1)[0],
                 aug_spec[0],
                 aug_normal[0],
-                rec_spec_batch_one[0],
+                # rec_spec_batch_one[0],
                 rec_spec_batch_two[0],
-                rec_normal_batch_one[0],
+                # rec_normal_batch_one[0],
                 rec_normal_batch_two[0],
             ),
             dim=0,

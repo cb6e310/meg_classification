@@ -6,9 +6,9 @@ EXPERIMENT:
   LOG_IMAGES: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
-  RESUME : False  # Resume training
-  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
-  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  RESUME : False # Resume training
+  CHECKPOINT : "proposed project/current_pretext_2024-05-25_11-14-32" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : 9  # Choose index of checkpoint to start from. If None, uses the latest chkp
   CHECKPOINT_GAP: 10
 DATASET:
   ROOT: "/home/song/datasets/EEG"
@@ -37,8 +37,8 @@ MODEL:
       # SOURCE_CHANNELS: 36
 SOLVER:
   TRAINER: "current"
-  BATCH_SIZE: 100
-  EPOCHS: 10
+  BATCH_SIZE: 256
+  EPOCHS: 100
   LR: 0.001
   SCHEDULER:
     TYPE: "ExponentialLR"

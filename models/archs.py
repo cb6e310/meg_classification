@@ -827,9 +827,9 @@ class CurrentCLR(BaseNet):
             rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
 
             return (
-                rec_spec_batch_one,
+                # rec_spec_batch_one,
                 rec_spec_batch_two,
-                rec_normal_batch_one,
+                # rec_normal_batch_one,
                 rec_normal_batch_two,
                 normal_inv_representation,
                 spec_inv_representation,
