@@ -49,6 +49,7 @@ class CurrentTrainer:
         self.rec_criterion = torch.nn.L1Loss().cuda()
         self.orthogonal_criterion = OrthLoss().cuda()
         self.cls_criterion = torch.nn.CrossEntropyLoss().cuda()
+        self.pred_criterion = torch.nn.MSELoss().cuda()
 
         self.model = model
         self.aug = aug
@@ -269,6 +270,7 @@ class CurrentTrainer:
             "loss_orthogonal": AverageMeter(),
             "loss_clr": AverageMeter(),
             "loss_cls": AverageMeter(),
+            "loss_pred": AverageMeter(),
             "top1": AverageMeter(),
         }
         num_iter = len(self.train_loader)
@@ -318,6 +320,7 @@ class CurrentTrainer:
                 "loss_orthogonal": train_meters["loss_orthogonal"].avg,
                 "loss_clr": train_meters["loss_clr"].avg,
                 "loss_cls": train_meters["loss_cls"].avg,
+                "loss_pred": train_meters["loss_pred"].avg,
             }
         )
         if not self.cfg.EXPERIMENT.DEBUG:
@@ -365,6 +368,7 @@ class CurrentTrainer:
         loss_rec_normal = torch.tensor(0, dtype=torch.float32).cuda()
         loss_total_rec = torch.tensor(0, dtype=torch.float32).cuda()
         loss_orthogonal = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_pred = torch.tensor(0, dtype=torch.float32).cuda()
         process_imgs = torch.tensor(0, dtype=torch.float32).cuda()
         _, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = self.rec_step(
             x
@@ -373,6 +377,8 @@ class CurrentTrainer:
         loss_total_rec = loss_rec_spec + loss_rec_normal
 
         loss_clr = self.clr_step(x)
+
+        loss_pred = self.pred_step(x)
 
         # loss_cls = self.cls_step(x)
 
@@ -397,7 +403,7 @@ class CurrentTrainer:
         train_meters["loss_cls"].update(
             loss_cls.cpu().detach().numpy().mean(), batch_size
         )
-        msg = "Epoch:{}|Time(train):{:.2f}|Loss_rec_total:{:.4f}|loss_rec_spec:{:.4f}|loss_rec_normal:{:.4f}|loss_orthogonal:{:.4f}|loss_clr:{:.4f}|loss_cls:{:.4f}|lr:{:.6f}".format(
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss_rec_total:{:.4f}|loss_rec_spec:{:.4f}|loss_rec_normal:{:.4f}|loss_orthogonal:{:.4f}|loss_clr:{:.4f}|loss_cls:{:.4f}|loss_pred:{:.4f}|lr:{:.6f}".format(
             epoch,
             # train_meters["data_time"].avg,
             train_meters["training_time"].avg,
@@ -407,6 +413,7 @@ class CurrentTrainer:
             train_meters["loss_orthogonal"].avg,
             train_meters["loss_clr"].avg,
             train_meters["loss_cls"].avg,
+            train_meters["loss_pred"].avg,
             self.optimizer.param_groups[0]["lr"],
         )
 
@@ -467,15 +474,11 @@ class CurrentTrainer:
             step="rec", rec_batch_view_spec=aug_spec, rec_batch_view_normal=aug_normal
         )
 
-        loss_rec_spec = self.rec_criterion(
-            rec_spec_batch_one, aug_spec
-        ) 
-        + self.rec_criterion(rec_spec_batch_two, aug_spec)
+        loss_rec_spec = self.rec_criterion(rec_spec_batch_one, aug_spec)
+        +self.rec_criterion(rec_spec_batch_two, aug_spec)
 
-        loss_rec_normal = self.rec_criterion(
-            rec_normal_batch_one, aug_normal
-        ) 
-        + self.rec_criterion(rec_normal_batch_two, aug_normal)
+        loss_rec_normal = self.rec_criterion(rec_normal_batch_one, aug_normal)
+        +self.rec_criterion(rec_normal_batch_two, aug_normal)
 
         loss_orthogonal = self.orthogonal_criterion(
             normal_inv_representation, normal_cs_representation
@@ -572,10 +575,10 @@ class CurrentTrainer:
         # forward
         pred_online_pred = self.model(step="pred", cls_batch_view=aug)
 
-        loss_pred = self.cls_criterion(pred_online_pred, labels)
+        loss_pred = self.pred_criterion(pred_online_pred, labels)
 
         loss_pred = loss_pred.mean()
-        loss_pred = loss_pred * self.cfg.MODEL.ARGS.CLS_WEIGHT
+        loss_pred = loss_pred * self.cfg.MODEL.ARGS.PRED_WEIGHT
 
         # backward
         self.optimizer.zero_grad()

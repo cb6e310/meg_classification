@@ -32,12 +32,28 @@ class jitter:
 
     def __call__(self, x):
         if self.random_sigma:
-            # random for each sample in batch
-            sigma = np.random.uniform(0, self.sigma, size=x.shape[0])
-            perbutated = [
-                
+            # Random sigma for each sample in the batch
+            sigmas_labels = np.random.uniform(
+                0, self.sigma, size=(x.shape[0], 1, 1)
+            )  # (batch_size, 1, 1)
+            sigmas_labels = torch.tensor(
+                sigmas_labels, dtype=torch.float32, device=x.device
+            ).squeeze(-1)
+            sigmas = torch.tensor(
+                sigmas_labels, dtype=torch.float32, device=x.device
+            ).expand(-1, x.shape[1], x.shape[2])
+
+            # Generate noise
+            noise = torch.randn_like(x)
+
+            # Apply noise scaled by sigmas
+            pertubated = x + noise * sigmas
+            return pertubated, sigmas_labels
+
         else:
-            return x + torch.normal(mean=0.0, std=self.sigma, size=x.shape).cuda()
+            return x + torch.normal(
+                mean=0.0, std=self.sigma, size=x.shape, device=x.device
+            )
 
 
 class scaling:
@@ -50,6 +66,7 @@ class scaling:
         ).cuda()
         res = torch.multiply(x, torch.unsqueeze(factor, 1))
         return res
+
 
 class timeshift:
     def __init__(self, shift_max=10):
@@ -155,7 +172,7 @@ class window_warp:
                     np.linspace(0, x.shape[1] - 1.0, num=warped.size),
                     warped,
                 ).T
-                
+
         return torch.from_numpy(ret).type(torch.FloatTensor).cuda()
         # begin = time.time()
         # B, T, D = x_torch.size()
