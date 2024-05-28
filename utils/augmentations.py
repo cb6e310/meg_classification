@@ -32,6 +32,8 @@ class AutoAUG(Module):
             window_warp(),
         ]
 
+    def random_jitter(self, x):
+        
 
 
 
@@ -91,6 +93,10 @@ class AutoAUG(Module):
             return aug1, labels
 
         elif step == "pred":
+            transform = Compose(self.normal_augs_wo_spec)
+            spec_transform = Compose([jitter()])
+            
+            
             pass
         
         else:

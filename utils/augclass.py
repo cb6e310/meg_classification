@@ -26,11 +26,18 @@ class cutout:
 
 
 class jitter:
-    def __init__(self, sigma=0.3) -> None:
+    def __init__(self, sigma=0.3, random_sigma=False) -> None:
         self.sigma = sigma
+        self.random_sigma = random_sigma
 
     def __call__(self, x):
-        return x + torch.normal(mean=0.0, std=self.sigma, size=x.shape).cuda()
+        if self.random_sigma:
+            # random for each sample in batch
+            sigma = np.random.uniform(0, self.sigma, size=x.shape[0])
+            perbutated = [
+                
+        else:
+            return x + torch.normal(mean=0.0, std=self.sigma, size=x.shape).cuda()
 
 
 class scaling:
