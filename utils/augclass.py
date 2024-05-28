@@ -36,9 +36,6 @@ class jitter:
             sigmas_labels = np.random.uniform(
                 0, self.sigma, size=(x.shape[0], 1, 1)
             )  # (batch_size, 1, 1)
-            sigmas_labels = torch.tensor(
-                sigmas_labels, dtype=torch.float32, device=x.device
-            ).squeeze(-1)
             sigmas = torch.tensor(
                 sigmas_labels, dtype=torch.float32, device=x.device
             ).expand(-1, x.shape[1], x.shape[2])
@@ -48,6 +45,9 @@ class jitter:
 
             # Apply noise scaled by sigmas
             pertubated = x + noise * sigmas
+            sigmas_labels = torch.tensor(
+                sigmas_labels, dtype=torch.float32, device=x.device
+            ).squeeze(-1)
             return pertubated, sigmas_labels
 
         else:

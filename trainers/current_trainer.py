@@ -403,7 +403,11 @@ class CurrentTrainer:
         train_meters["loss_cls"].update(
             loss_cls.cpu().detach().numpy().mean(), batch_size
         )
-        msg = "Epoch:{}|Time(train):{:.2f}|Loss_rec_total:{:.4f}|loss_rec_spec:{:.4f}|loss_rec_normal:{:.4f}|loss_orthogonal:{:.4f}|loss_clr:{:.4f}|loss_cls:{:.4f}|loss_pred:{:.4f}|lr:{:.6f}".format(
+        train_meters["loss_pred"].update(
+            loss_pred.cpu().detach().numpy().mean(), batch_size
+        )
+        
+        msg = "Epoch:{}|Time(train):{:.2f}|rec_total:{:.4f}|rec_spec:{:.4f}|rec_normal:{:.4f}|orthogonal:{:.4f}|clr:{:.4f}|cls:{:.4f}|pred:{:.4f}|lr:{:.6f}".format(
             epoch,
             # train_meters["data_time"].avg,
             train_meters["training_time"].avg,
@@ -573,7 +577,7 @@ class CurrentTrainer:
         labels = labels.cuda()
 
         # forward
-        pred_online_pred = self.model(step="pred", cls_batch_view=aug)
+        pred_online_pred = self.model(step="pred", pred_batch_view=aug)
 
         loss_pred = self.pred_criterion(pred_online_pred, labels)
 

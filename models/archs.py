@@ -638,15 +638,14 @@ class CurrentNetWrapper(nn.Module):
         representation = representations[0]
         inv4rec = representations[1][0]
         inv4clr = representations[1][1]
-        acs4rec = representations[2][0]
-        acs4clr = representations[2][1]
+        acs = representations[2]
         # logger.debug(representation.shape)
         if not return_projection:
-            return representation, inv4rec, acs4rec
+            return representation, inv4rec, acs
 
-        projector = self._get_projector(inv4clr)
-        projection = projector(inv4clr)
-        return projection
+        projector_inv = self._get_projector(inv4clr)
+        projection_inv = projector_inv(inv4clr)
+        return projection_inv
 
 
 class CurrentCLR(BaseNet):
@@ -780,8 +779,6 @@ class CurrentCLR(BaseNet):
         # ), "you must have greater than 1 sample when training, due to the batchnorm in the projection layer"
 
         if step == "clr":
-            if return_embedding:
-                return self.online_encoder(clr_batch_view_1, return_projection=False)
 
             views = torch.cat((clr_batch_view_1, clr_batch_view_2), dim=0)
 
@@ -816,6 +813,9 @@ class CurrentCLR(BaseNet):
             _, spec_inv_representation, spec_acs_representation = self.online_encoder(
                 rec_batch_view_spec, return_projection=False
             )
+
+            normal_acs_representation = normal_acs_representation[0]
+            spec_acs_representation = spec_acs_representation[0]
 
             rec_spec_batch_one = self.decoder(
                 spec_inv_representation, spec_acs_representation
@@ -860,9 +860,11 @@ class CurrentCLR(BaseNet):
 
 
         elif step == "pred":
-            _, _, pred_representation = self.online_encoder(
+            _, _, acs_representation = self.online_encoder(
                 pred_batch_view, return_projection=False
             )
+            pred_representation = acs_representation[1]
+            
             pred_output = self.pred_fc(pred_representation)
             return pred_output
 
