@@ -473,6 +473,7 @@ class EEGConvNetBackbone(nn.Module):
         # self.block2 = ResidualBlock(256, 256)
         # self.block3 = ResidualBlock(256, 256)
         self.block4 = ResidualBlock(256, 256)
+        self.block5 = ResidualBlock(256, 256)
         self.view = TensorView()
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.dist_inv_head = nn.Sequential(nn.Conv2d(256, 256, 3, 1, 1), nn.LeakyReLU())
@@ -486,6 +487,7 @@ class EEGConvNetBackbone(nn.Module):
         x = self.block2(x)
         x = self.block3(x)
         x = self.block4(x)
+        x = self.block5(x)
         out_inv = self.dist_inv_head(x)
         out_inv_g = self.avg_pool(out_inv)
         out_inv_g = self.view(out_inv_g)
@@ -494,10 +496,10 @@ class EEGConvNetBackbone(nn.Module):
         out_acs_g = self.avg_pool(out_acs)
         out_acs_g = self.view(out_acs_g)
 
-        x = self.avg_pool(x)
-        out = self.view(x)
+        out = self.avg_pool(x)
+        out = self.view(out)
 
-        return out, (out_inv, out_inv_g), (out_acs, out_acs_g)
+        return (x, out), (out_inv, out_inv_g), (out_acs, out_acs_g)
 
 
 class SimCLR(BaseNet):
@@ -713,9 +715,7 @@ class CurrentCLR(BaseNet):
         #     input_dim=projection_size*2,
         #     output_dim=feature_size
         # )
-        self.decoder = ConvDecoder(
-            filter_size=3, channels=channels, length=feature_size
-        )
+        self.decoder = ConvDecoder(filter_size=3, channels=channels, length=feature_size)
         self.cls_fc = nn.Linear(projection_size, cfg.DATASET.NUM_CLASSES)
 
         # regressive head
@@ -728,7 +728,6 @@ class CurrentCLR(BaseNet):
             nn.ReLU(),
             nn.Linear(64, 1),
         )
-
 
         # get device of network and make wrapper same device
         device = get_module_device(self.net)
@@ -807,12 +806,14 @@ class CurrentCLR(BaseNet):
             )
 
         elif step == "rec":
-            _, normal_inv_representation, normal_acs_representation = self.online_encoder(
-                rec_batch_view_normal, return_projection=False
+            representation, normal_inv_representation, normal_acs_representation = (
+                self.online_encoder(rec_batch_view_normal, return_projection=False)
             )
             _, spec_inv_representation, spec_acs_representation = self.online_encoder(
                 rec_batch_view_spec, return_projection=False
             )
+
+            # representation4rec = representation[0]
 
             normal_acs_representation = normal_acs_representation[0]
             spec_acs_representation = spec_acs_representation[0]
@@ -830,26 +831,25 @@ class CurrentCLR(BaseNet):
             )
 
             rec_normal_batch_two = self.decoder(
-                spec_inv_representation, normal_acs_representation
+                spec_inv_representation, normal_inv_representation
             )
 
             rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
             rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
             rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
             rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
-
+            # rec_representation = rec_representation.unsqueeze(-1)
             return (
                 rec_spec_batch_one,
                 rec_spec_batch_two,
                 rec_normal_batch_one,
                 rec_normal_batch_two,
+                # rec_representation,
                 normal_inv_representation,
                 spec_inv_representation,
                 normal_acs_representation,
                 spec_acs_representation,
             )
-
-            pass
 
         elif step == "cls":
             _, _, cls_representation = self.online_encoder(
@@ -858,13 +858,12 @@ class CurrentCLR(BaseNet):
             cls_logits = self.cls_fc(cls_representation)
             return cls_logits
 
-
         elif step == "pred":
             _, _, acs_representation = self.online_encoder(
                 pred_batch_view, return_projection=False
             )
             pred_representation = acs_representation[1]
-            
+
             pred_output = self.pred_fc(pred_representation)
             return pred_output
 

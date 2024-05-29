@@ -58,9 +58,8 @@ class AutoAUG(Module):
             aug2 = aug2.transpose(1, 2)
             return aug1, aug2
         elif step == "rec":
-            spec_transform = Compose([scaling()])
-            # transform = Compose([scaling()])
-            aug1 = spec_transform(x)
+            aug1 = self.random_jitter(x, max_sigma=1)[0]
+            # aug1=x
             aug2 = x
             aug1 = aug1.transpose(1, 2)
             aug2 = aug2.transpose(1, 2)

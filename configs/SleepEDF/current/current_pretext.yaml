@@ -3,7 +3,7 @@ EXPERIMENT:
   TAG: "proposed"
   PROJECT: "proposed project"
   DEBUG: False 
-  LOG_IMAGES: False
+  LOG_IMAGES: True
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   RESUME : False # Resume training

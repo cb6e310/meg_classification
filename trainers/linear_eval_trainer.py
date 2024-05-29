@@ -196,7 +196,7 @@ class LinearEvalTrainer:
             #     x = torch.unsqueeze(x, -1)
             with torch.no_grad():
                 if self.cfg.MODEL.ARGS.BACKBONE == "eegconvnet":
-                    h = self.model(x, x, return_embedding=True, return_projection=False)[0]
+                    h = self.model(x, x, return_embedding=True, return_projection=False)[0][1]
             h = h.detach()
 
             feature_vector.extend(h.cpu().detach().numpy())

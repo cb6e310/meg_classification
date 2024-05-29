@@ -263,10 +263,13 @@ class ConvDecoder(nn.Module):
             nn.Conv1d(32, channels, kernel_size=filter_size, padding="same"),
         )
 
+        self.fusion = nn.Conv1d(256, 256, kernel_size=1)
+
         self.length = length
 
     def forward(self, x1, x2):
-        encoded = F.normalize(x1 + x2, dim=1)
+        # encoded = F.normalize(x1 + x2, dim=2)
+        encoded = x1+x2
         encoded = torch.squeeze(encoded)
         decoded = self.decoder(encoded)
         decoded = F.interpolate(

@@ -211,8 +211,9 @@ class CurrentTrainer:
             "rec_spec_batch_two",
             "rec_normal_batch_one",
             "rec_normal_batch_two",
+            # "rec_representation",
         ]
-        imgs = imgs.squeeze()[:, ::10].cpu().detach().numpy()
+        imgs = imgs.squeeze()[:, ::50].cpu().detach().numpy()
         fig, axes = plt.subplots(7, 1, figsize=(10, 15), sharex=True)
         for i in range(7):
             axes[i].plot(imgs[i], color="black")
@@ -378,7 +379,7 @@ class CurrentTrainer:
 
         loss_clr = self.clr_step(x)
 
-        loss_pred = self.pred_step(x)
+        # loss_pred = self.pred_step(x)
 
         # loss_cls = self.cls_step(x)
 
@@ -406,7 +407,7 @@ class CurrentTrainer:
         train_meters["loss_pred"].update(
             loss_pred.cpu().detach().numpy().mean(), batch_size
         )
-        
+
         msg = "Epoch:{}|Time(train):{:.2f}|rec_total:{:.4f}|rec_spec:{:.4f}|rec_normal:{:.4f}|orthogonal:{:.4f}|clr:{:.4f}|cls:{:.4f}|pred:{:.4f}|lr:{:.6f}".format(
             epoch,
             # train_meters["data_time"].avg,
@@ -455,6 +456,10 @@ class CurrentTrainer:
         return msg
 
     def rec_step(self, x):
+        loss_total = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_rec_spec = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_rec_normal = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_orthogonal = torch.tensor(0, dtype=torch.float32).cuda()
 
         # rec step
         self.optimizer.zero_grad()
@@ -470,10 +475,11 @@ class CurrentTrainer:
             rec_spec_batch_two,
             rec_normal_batch_one,
             rec_normal_batch_two,
+            # rec_representation,
             normal_inv_representation,
             spec_inv_representation,
-            normal_cs_representation,
-            spec_cs_representation,
+            normal_acs_representation,
+            spec_acs_representation,
         ) = self.model(
             step="rec", rec_batch_view_spec=aug_spec, rec_batch_view_normal=aug_normal
         )
@@ -485,11 +491,12 @@ class CurrentTrainer:
         +self.rec_criterion(rec_normal_batch_two, aug_normal)
 
         loss_orthogonal = self.orthogonal_criterion(
-            normal_inv_representation, normal_cs_representation
-        ) + self.orthogonal_criterion(spec_inv_representation, spec_cs_representation)
+            normal_inv_representation, normal_acs_representation
+        )
+        +self.orthogonal_criterion(spec_inv_representation, spec_acs_representation)
 
         loss_total = (
-            self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_spec + loss_rec_normal)
+            self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_normal + loss_rec_spec)
             + loss_orthogonal
         )
 
@@ -503,10 +510,11 @@ class CurrentTrainer:
                 x.unsqueeze(-1)[0],
                 aug_spec[0],
                 aug_normal[0],
-                # rec_spec_batch_one[0],
+                rec_spec_batch_one[0],
                 rec_spec_batch_two[0],
-                # rec_normal_batch_one[0],
+                rec_normal_batch_one[0],
                 rec_normal_batch_two[0],
+                # rec_representation[0],
             ),
             dim=0,
         ).unsqueeze(1)
