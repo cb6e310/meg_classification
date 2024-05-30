@@ -20,7 +20,7 @@ class AutoAUG(Module):
             # subsequence(),
             timeshift(),
             cutout(),
-            jitter(),
+            # jitter(),
             scaling(),
             window_warp(),
         ]
@@ -29,6 +29,7 @@ class AutoAUG(Module):
             timeshift(),
             cutout(),
             window_warp(),
+            scaling()
         ]
 
     @staticmethod

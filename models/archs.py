@@ -643,7 +643,7 @@ class CurrentNetWrapper(nn.Module):
         acs = representations[2]
         # logger.debug(representation.shape)
         if not return_projection:
-            return representation, inv4rec, acs
+            return representation, inv4clr, acs
 
         projector_inv = self._get_projector(inv4clr)
         projection_inv = projector_inv(inv4clr)
@@ -859,10 +859,10 @@ class CurrentCLR(BaseNet):
             return cls_logits
 
         elif step == "pred":
-            _, _, acs_representation = self.online_encoder(
+            _, inv_representation, _= self.online_encoder(
                 pred_batch_view, return_projection=False
             )
-            pred_representation = acs_representation[1]
+            pred_representation = inv_representation
 
             pred_output = self.pred_fc(pred_representation)
             return pred_output

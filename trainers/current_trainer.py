@@ -371,15 +371,16 @@ class CurrentTrainer:
         loss_orthogonal = torch.tensor(0, dtype=torch.float32).cuda()
         loss_pred = torch.tensor(0, dtype=torch.float32).cuda()
         process_imgs = torch.tensor(0, dtype=torch.float32).cuda()
-        _, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = self.rec_step(
-            x
-        )
+
+        # _, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = self.rec_step(
+        #     x
+        # )
 
         loss_total_rec = loss_rec_spec + loss_rec_normal
 
         loss_clr = self.clr_step(x)
 
-        # loss_pred = self.pred_step(x)
+        loss_pred = self.pred_step(x)
 
         # loss_cls = self.cls_step(x)
 
