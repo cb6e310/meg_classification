@@ -4,25 +4,22 @@ import torch
 import time
 from torch.nn.functional import interpolate
 
+import braindecode.augmentation as bdaug
+
 
 def totensor(x):
     return torch.from_numpy(x).type(torch.FloatTensor).cuda()
 
 
-class cutout:
-    def __init__(self, perc=0.1) -> None:
-        self.perc = perc
+class crop:
+    def __init__(self, resize, crop_size=0.8) -> None:
+        crop_size = int(resize * crop_size)
+        self.aug = tsaug.Crop(size=crop_size, resize=resize)
 
-    def __call__(self, ts):
-        seq_len = ts.shape[1]
-        new_ts = ts.clone()
-        win_len = int(self.perc * seq_len)
-        start = np.random.randint(0, seq_len - win_len - 1)
-        end = start + win_len
-        start = max(0, start)
-        end = min(end, seq_len)
-        new_ts[:, start:end, :] = 0.0
-        return new_ts
+    def __call__(self, x):
+        x = x.cpu().detach().numpy()
+        x = self.aug.augment(x)
+        return totensor(x.astype(np.float32))
 
 
 class jitter:
@@ -61,6 +58,7 @@ class scaling:
         self.sigma = sigma
 
     def __call__(self, x):
+        # random scaling for each sample in the batch
         factor = torch.normal(
             mean=1.0, std=self.sigma, size=(x.shape[0], x.shape[2])
         ).cuda()
@@ -213,20 +211,97 @@ class window_warp:
         # return ret
 
 
-class subsequence:
+class TimeReverse:
     def __init__(self) -> None:
-        pass
+        self.aug = bdaug.TimeReverse(probability=1)
 
     def __call__(self, x):
-        ts = x
-        seq_len = ts.shape[1]
-        ts_l = x.size(1)
-        crop_l = np.random.randint(low=2, high=ts_l + 1)
-        new_ts = ts.clone()
-        start = np.random.randint(ts_l - crop_l + 1)
-        end = start + crop_l
-        start = max(0, start)
-        end = min(end, seq_len)
-        new_ts[:, :start, :] = 0.0
-        new_ts[:, end:, :] = 0.0
-        return new_ts
+        # select half of the samples in batch to reverse
+        applied_batch_idx = np.random.choice(x.shape[0], x.shape[0] // 2, replace=False)
+        x[applied_batch_idx] = self.aug(x[applied_batch_idx], None)
+        # labels:0 for not reversed, 1 for reversed
+        labels = torch.zeros(x.shape[0], dtype=torch.long)
+        labels[applied_batch_idx] = 1
+        return x, labels
+
+
+class SignFlip:
+    def __init__(self) -> None:
+        self.aug = bdaug.SignFlip(probability=1)
+
+    def __call__(self, x):
+        # select half of the samples in batch to flip
+        applied_batch_idx = np.random.choice(x.shape[0], x.shape[0] // 2, replace=False)
+        x[applied_batch_idx] = self.aug(x[applied_batch_idx], None)
+        # labels:0 for not flipped, 1 for flipped
+        labels = torch.zeros(x.shape[0], dtype=torch.long)
+        labels[applied_batch_idx] = 1
+        return x, labels
+
+
+class FTSurrogate:
+    def __init__(self, p=1, fine_factor=10) -> None:
+        self.aug = bdaug.FTSurrogate(p)
+        self.fine_factor = fine_factor
+
+    def __call__(self, x):
+        fine_factor = self.fine_factor
+        # split x into fine_factor numbers of batches
+        fined_size = x.shape[0] // fine_factor
+        fined_x = list(torch.split(x, fined_size, dim=0))
+        noise = torch.rand(fine_factor, 1)
+        labels = torch.zeros(x.shape[0], dtype=torch.long)
+        labels = list(torch.split(labels, fined_size, dim=0))
+        for i in np.arange(len(fined_x)):
+            fined_x[i] = self.aug.operation(fined_x[i], None, noise[i], False)[0]
+            labels[i] = torch.full(labels[i].size(), noise[i][0])
+        # expand noise to the same shape as x
+        fined_x = torch.cat(fined_x, 0)
+        labels = torch.cat(labels, 0)
+        return fined_x, labels
+
+
+class TimeShift:
+    def __init__(self, max_shift=0.1):
+        self.max_shift = max_shift
+
+    def __call__(self, x):
+        batch_size, channels, length = x.size()
+        max_shift = int(self.max_shift * length)
+        roll_lengths = torch.randint(-max_shift, max_shift + 1, (batch_size,))
+
+        # Create an index tensor for rolling
+        indices = (torch.arange(length).unsqueeze(0) - roll_lengths.unsqueeze(1)) % length
+        indices = indices.unsqueeze(1).expand(batch_size, channels, -1)
+
+        # Apply the roll using advanced indexing
+        rolled_batch = torch.gather(x, 2, indices)
+
+        return rolled_batch, roll_lengths
+
+
+class FrequencyShift:
+    def __init__(self, sfreq, max_shift=10, fined_factor=10):
+        self.sfreq = sfreq
+        self.max_shift = max_shift
+        self.aug = bdaug.FrequencyShift(probability=1, sfreq=sfreq)
+        self.fined_factor = fined_factor
+
+    def __call__(self, x):
+        fined_size = x.shape[0] // self.fined_factor
+        freq_shift = np.random.uniform(-self.max_shift, self.max_shift, size=fined_size)
+        freq_shift = freq_shift.reshape(-1, 1)
+        # split x into fine_factor numbers of batches and to cpu
+        fined_x = list(torch.split(x.cpu(), fined_size, dim=0))
+        labels = torch.zeros(x.shape[0], dtype=torch.long)
+        labels = list(torch.split(labels, fined_size, dim=0))
+        for i in np.arange(len(fined_x)):
+            fined_x[i] = self.aug.operation(
+                fined_x[i], None, freq_shift[i], sfreq=self.sfreq
+            )[0]
+            labels[i] = torch.full(labels[i].size(), freq_shift[i][0])
+
+        fined_x = torch.cat(fined_x, 0)
+        labels = torch.cat(labels, 0)
+
+        return fined_x, labels

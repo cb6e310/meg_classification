@@ -17,23 +17,57 @@ class AutoAUG(Module):
         super(AutoAUG, self).__init__()
         self.cfg = cfg
         self.all_augs = [
-            # subsequence(),
+            crop(resize=cfg.DATASET.POINTS),
             timeshift(),
-            cutout(),
             jitter(),
             scaling(),
             window_warp(),
         ]
 
         self.normal_augs_wo_spec = [
+            crop(resize=cfg.DATASET.POINTS),
             timeshift(),
-            cutout(),
             window_warp(),
+        ]
+
+        self.sensitive_base_augs = [
+            crop(resize=cfg.DATASET.POINTS),
         ]
 
     @staticmethod
     def random_jitter(x, max_sigma=0.5):
         output = jitter(sigma=max_sigma, random_sigma=True)(x)
+        return output
+
+    @staticmethod
+    def random_timereverse(x):
+        output = TimeReverse()(x)
+        return output
+
+    @staticmethod
+    def random_signflip(x):
+        output = SignFlip()(x)
+        return output
+
+    @staticmethod
+    def random_ftsurrogate(x):
+        output = FTSurrogate()(x)
+        return output
+
+    @staticmethod
+    def random_timeshift(x):
+        output = TimeShift(max_shift=0.4)(x)
+        return output
+
+    @staticmethod
+    def random_scaling(x):
+        output = Scaling()(x)
+        return output
+
+    @staticmethod
+    def random_frequencyshift(x, sfreq):
+        sfreq
+        output = FrequencyShift(sfreq=100)(x)
         return output
 
     def forward(self, x, step=None):
@@ -51,12 +85,16 @@ class AutoAUG(Module):
             return aug1, aug2
 
         if step == "clr":
-            transform = Compose(self.normal_augs_wo_spec)
-            aug1 = transform(x)
-            aug2 = transform(x)
+            # transform = Compose(self.normal_augs_wo_spec)
+            base_aug = Compose(self.sensitive_base_augs)
+            x1 = base_aug(x)
+            x2 = base_aug(x)
+            aug1, _ = self.random_signflip(x1)
+            aug2, _ = self.random_signflip(x2)
             aug1 = aug1.transpose(1, 2)
             aug2 = aug2.transpose(1, 2)
             return aug1, aug2
+
         elif step == "rec":
             aug1 = self.random_jitter(x, max_sigma=1)[0]
             # aug1=x
@@ -91,11 +129,11 @@ class AutoAUG(Module):
             return aug1, labels
 
         elif step == "pred":
-            transform = Compose(self.normal_augs_wo_spec)
-            x = transform(x)
-            spec_x, sigma_labels = self.random_jitter(x)
+            # transform = Compose(self.normal_augs_wo_spec)
+            # x = transform(x)
+            spec_x, labels = self.random_signflip(x)
             spec_x = spec_x.transpose(1, 2)
-            return spec_x, sigma_labels
+            return spec_x, labels
 
         else:
-            raise ValueError("step should be one of 'clr', 'rec', 'cls'")
+            raise ValueError("step should be one of 'clr', 'rec', 'cls', 'pred'")
