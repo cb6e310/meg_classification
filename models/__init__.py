@@ -12,6 +12,7 @@ model_dict = {
     "SimSiam": (BYOL, ""),
     "TSEncoder": (TSEncoder, ""),
     "CurrentCLR": (CurrentCLR, ""),
+    "CurrentSimCLR": (CurrentSimCLR, ""),
 }
 
 criterion_dict = {

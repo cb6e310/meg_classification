@@ -119,7 +119,7 @@ def get_data_loader_from_dataset(
                 cur_data = cur_dataset["data"]
                 cur_labels = cur_dataset["labels"]
 
-            elif cfg.DATASET.TYPE == "sleepedf20" and cur_file.endswith("npy"):
+            elif  "sleepedf20" in cfg.DATASET.TYPE  and cur_file.endswith("npy"):
                 cur_dataset = np.load(os.path.join(dataset_path, cur_file))
                 cur_data = cur_dataset[:, :-1]
                 cur_data = np.expand_dims(cur_data, axis=1)

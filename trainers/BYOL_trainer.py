@@ -241,29 +241,30 @@ class BYOLTrainer:
                 "test_loss": test_loss,
             }
         )
-        self.log(epoch, log_dict)
+        if not self.cfg.EXPERIMENT.DEBUG:
+            self.log(epoch, log_dict)
         # saving checkpoint
         # saving occasional checkpoints
 
-        state = {
-            "epoch": epoch,
-            "model_state_dict": self.model.state_dict(),
-            "model": self.cfg.MODEL.TYPE,
-            "optimizer": self.optimizer.state_dict(),
-            "scheduler": self.scheduler.state_dict(),
-            "best_acc": self.best_acc,
-            "loss": train_meters["losses"].avg,
-            "dataset": self.cfg.DATASET.TYPE,
-        }
+            state = {
+                "epoch": epoch,
+                "model_state_dict": self.model.state_dict(),
+                "model": self.cfg.MODEL.TYPE,
+                "optimizer": self.optimizer.state_dict(),
+                "scheduler": self.scheduler.state_dict(),
+                "best_acc": self.best_acc,
+                "loss": train_meters["losses"].avg,
+                "dataset": self.cfg.DATASET.TYPE,
+            }
 
-        if (epoch + 1) % self.cfg.EXPERIMENT.CHECKPOINT_GAP == 0:
-            logger.info("Saving checkpoint to {}".format(self.log_path))
-            chkp_path = os.path.join(
-                self.log_path,
-                "checkpoints",
-                "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
-            )
-            torch.save(state, chkp_path)
+            if (epoch + 1) % self.cfg.EXPERIMENT.CHECKPOINT_GAP == 0:
+                logger.info("Saving checkpoint to {}".format(self.log_path))
+                chkp_path = os.path.join(
+                    self.log_path,
+                    "checkpoints",
+                    "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
+                )
+                torch.save(state, chkp_path)
 
         # save best checkpoint with loss or accuracy
         if self.cfg.EXPERIMENT.TASK != "pretext":

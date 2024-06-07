@@ -38,7 +38,7 @@ from loguru import logger
 from utils.validate import validate
 
 
-class CurrentTrainer:
+class CurrentSimCLRTrainer:
     def __init__(
         self, experiment_name, model, criterion, train_loader, val_loader, aug, cfg
     ):
@@ -532,15 +532,15 @@ class CurrentTrainer:
 
         # forward
         (
-            clr_online_pred_one,
-            clr_online_pred_two,
+            _,
+            _,
             clr_target_proj_one,
             clr_target_proj_two,
         ) = self.model(step="clr", clr_batch_view_1=aug_1, clr_batch_view_2=aug_2)
 
         loss_clr = self.clr_criterion(
-            clr_online_pred_one, clr_target_proj_two
-        ) + self.clr_criterion(clr_online_pred_two, clr_target_proj_one)
+            clr_target_proj_one, clr_target_proj_two
+        )
 
         loss_clr = loss_clr.mean()
 

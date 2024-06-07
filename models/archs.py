@@ -211,6 +211,10 @@ class NetWrapper(nn.Module):
             inv_representation = representations[1]
             acs_representation = representations[2]
             # logger.debug(representation.shape)
+        elif type(self.net).__name__ == "VARCNNBackbone":
+            representation = representations[0][1]
+            inv_representation = representations[1]
+            acs_representation = representations[2]
             if not return_projection:
                 return representation, inv_representation, acs_representation
         if not return_projection:
@@ -370,37 +374,61 @@ class VARCNN(BaseNet):
 
         Conv = VARConv
 
-        self.net = nn.Sequential(
-            OrderedDict(
-                [
-                    ("transpose0", Transpose(1, 2)),
-                    ("Spatial", nn.Linear(meg_channels, sources_channels)),
-                    ("transpose1", Transpose(1, 2)),
-                    (
-                        "Temporal_VAR",
-                        Conv(
-                            in_channels=sources_channels,
-                            out_channels=sources_channels,
-                            kernel_size=7,
-                        ),
-                    ),
-                    ("unsqueeze", Unsqueeze(-3)),
-                    ("active", nn.ReLU()),
-                    ("pool", nn.MaxPool2d((1, max_pool), (1, max_pool))),
-                    ("view", TensorView()),
-                    ("dropout", nn.Dropout(p=0.5)),
-                    (
-                        "linear",
-                        nn.Linear(sources_channels * int(points_length / 2), num_classes),
-                    ),
-                ]
-            )
+        # self.net = nn.Sequential(
+        #     OrderedDict(
+        #         [
+        #             ("transpose0", Transpose(1, 2)),
+        #             ("Spatial", nn.Linear(meg_channels, sources_channels)),
+        #             ("transpose1", Transpose(1, 2)),
+        #             (
+        #                 "Temporal_VAR",
+        #                 Conv(
+        #                     in_channels=sources_channels,
+        #                     out_channels=sources_channels,
+        #                     kernel_size=7,
+        #                 ),
+        #             ),
+        #             ("unsqueeze", Unsqueeze(-3)),
+        #             ("active", nn.ReLU()),
+        #             ("pool", nn.MaxPool2d((1, max_pool), (1, max_pool))),
+        #             ("view", TensorView()),
+        #             ("dropout", nn.Dropout(p=0.5)),
+        #             (
+        #                 "linear",
+        #                 nn.Linear(sources_channels * int(points_length / 2), num_classes),
+        #             ),
+        #         ]
+        #     )
+        # )
+        self.transpose0 = Transpose(1, 2)
+        self.Spatial = nn.Linear(meg_channels, sources_channels)
+        self.transpose1 = Transpose(1, 2)
+        self.Temporal_VAR = Conv(
+            in_channels=sources_channels,
+            out_channels=sources_channels,
+            kernel_size=7,
         )
+        self.unsqueeze = Unsqueeze(-3)
+        self.active = nn.ReLU()
+        self.pool = nn.MaxPool2d((1, max_pool), (1, max_pool))
+        self.view = TensorView()
+        self.dropout = nn.Dropout(p=0.5)
+        self.linear = nn.Linear(sources_channels * int(points_length / 2), num_classes)
 
     def forward(self, x, target=None):
-        preds = self.net(x)
-        loss = self.compute_loss(preds, target)
-        return preds, loss
+
+        x = self.transpose0(x)
+        x = x.squeeze()
+        x = self.Spatial(x)
+        x = self.transpose1(x)
+        x = self.Temporal_VAR(x)
+        x = self.active(x)
+        x = self.pool(x)
+        x = self.view(x)
+        x = self.dropout(x)
+        x = self.linear(x)
+
+        return x
 
 
 class VARCNNBackbone(BaseNet):
@@ -427,10 +455,10 @@ class VARCNNBackbone(BaseNet):
         self.active = nn.LeakyReLU()
         self.pool = nn.MaxPool2d((1, 2), (1, 2))
         self.dist_inv_head = nn.Sequential(
-            nn.Conv1d(sources_channels, sources_channels, 3, 1, 1), nn.LeakyReLU()
+            nn.Conv2d(sources_channels, sources_channels, 3, 1, 1), nn.LeakyReLU()
         )
         self.dist_acs_head = nn.Sequential(
-            nn.Conv1d(sources_channels, sources_channels, 3, 1, 1), nn.LeakyReLU()
+            nn.Conv2d(sources_channels, sources_channels, 3, 1, 1), nn.LeakyReLU()
         )
         # self.pool = nn.AdaptiveAvgPool1d(1)
         self.view = TensorView()
@@ -442,20 +470,20 @@ class VARCNNBackbone(BaseNet):
         x = self.Spatial(x)
         x = self.transpose1(x)
         x = self.Temporal_VAR(x)
-        # x = self.unsqueeze(x)
+        x = torch.unsqueeze(x, -1)
         x = self.active(x)
-        x = self.pool(x)
 
         out_inv = self.dist_inv_head(x)
-        out_inv = self.view(out_inv)
+        out_inv_g = self.view(out_inv)
 
         out_acs = self.dist_acs_head(x)
-        out_acs = self.view(out_acs)
+        out_acs_g = self.view(out_acs)
 
-        out = self.view(x)
+        out = self.pool(x)
+        out = self.view(out)
         out = self.dropout(out)
 
-        return out, out_inv, out_acs
+        return (x, out), (out_inv, out_inv_g), (out_acs, out_acs_g)
 
 
 class EEGConvNetBackbone(nn.Module):
@@ -701,21 +729,12 @@ class CurrentCLR(BaseNet):
             projection_size, projection_size, projection_hidden_size, simple=simple
         )
 
-        # self.decoder = ConvGenerator(
-        #     input_dim=projection_size,
-        #     output_channels=channels,
-        #     output_length=feature_size,
-        # )
-        # self.decoder = Generator(
-        #     input_dim=projection_size,
-        #     output_channels=channels,
-        #     output_length=feature_size,
-        # )
-        # self.decoder = ConvDecoder(
-        #     input_dim=projection_size*2,
-        #     output_dim=feature_size
-        # )
-        self.decoder = ConvDecoder(filter_size=3, channels=channels, length=feature_size)
+        self.decoder = ConvDecoder(
+            input_channels=self.cfg.DATASET.CHANNELS,
+            filter_size=3,
+            channels=channels,
+            length=feature_size,
+        )
         self.cls_fc = nn.Linear(projection_size, cfg.DATASET.NUM_CLASSES)
 
         # regressive head
@@ -871,3 +890,152 @@ class CurrentCLR(BaseNet):
             # linear evaluation
             if return_embedding:
                 return self.online_encoder(clr_batch_view_1, return_projection=False)
+
+
+class CurrentSimCLR(BaseNet):
+    def __init__(self, cfg):
+        super(CurrentSimCLR, self).__init__(cfg)
+        input_channels = cfg.DATASET.CHANNELS
+        num_classes = cfg.DATASET.NUM_CLASSES
+
+        backbone_name = cfg.MODEL.ARGS.BACKBONE
+        projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+        n_features = cfg.MODEL.ARGS.N_FEATURES
+
+        if "resnet" in backbone_name:
+            self.backbone = backbone_dict[backbone_name][0](pretrained=False)
+            self.backbone.conv1 = nn.Conv2d(
+                input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+            )
+            self.projection_head = nn.Sequential(
+                nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features),
+                nn.ReLU(),
+                nn.Linear(self.backbone.fc.in_features, projection_dim),
+            )
+            self.backbone.fc = nn.Identity()
+        else:
+            self.backbone = backbone_dict[backbone_name][0](cfg)
+            self.projection_head = nn.Sequential(
+                nn.Linear(n_features, projection_dim),
+            )
+
+        # regressive head
+        self.pred_fc = nn.Sequential(
+            nn.Linear(projection_dim, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Linear(64, 1),
+        )
+
+        self.decoder = ConvDecoder(
+            input_channels=projection_dim,
+            filter_size=3,
+            channels=input_channels,
+            length=cfg.DATASET.POINTS,
+        )
+        # self.criterion = contrastive_loss(cfg)
+
+        # self.fc = nn.Linear(projection_dim, num_classes)
+
+    def forward(
+        self,
+        step=None,
+        clr_batch_view_1=None,
+        clr_batch_view_2=None,
+        rec_batch_view_spec=None,
+        rec_batch_view_normal=None,
+        cls_batch_view=None,
+        pred_batch_view=None,
+        return_embedding=False,
+        return_projection=True,
+    ):
+        if step == "clr":
+            if "resnet" in self.cfg.MODEL.ARGS.BACKBONE:
+                h_i = self.backbone(clr_batch_view_1)
+                h_j = self.backbone(clr_batch_view_2)
+            else:
+
+                _, h_i, _ = self.backbone(clr_batch_view_1)
+                _, h_j, _ = self.backbone(clr_batch_view_2)
+                h_i = h_i[1]
+                h_j = h_j[1]
+            z_i = F.normalize(self.projection_head(h_i), dim=-1)
+            z_j = F.normalize(self.projection_head(h_j), dim=-1)
+            # logger.debug(z_i.shape)
+
+            # loss = self.compute_loss(z_i, z_j)
+            if return_embedding:
+                return h_i
+            return h_i, h_j, z_i, z_j
+
+        elif step == "rec":
+            representation, normal_inv_representation, normal_acs_representation = (
+                self.backbone(rec_batch_view_normal)
+            )
+            _, spec_inv_representation, spec_acs_representation = self.backbone(
+                rec_batch_view_spec
+            )
+
+            # representation4rec = representation[0]
+
+            normal_acs_representation = normal_acs_representation[0]
+            spec_acs_representation = spec_acs_representation[0]
+            normal_inv_representation = normal_inv_representation[0]
+            spec_inv_representation = spec_inv_representation[0]
+
+            rec_spec_batch_one = self.decoder(
+                spec_inv_representation, spec_acs_representation
+            )
+
+            rec_spec_batch_two = self.decoder(
+                normal_inv_representation, spec_acs_representation
+            )
+
+            rec_normal_batch_one = self.decoder(
+                normal_inv_representation, normal_acs_representation
+            )
+
+            rec_normal_batch_two = self.decoder(
+                spec_inv_representation, normal_inv_representation
+            )
+
+            rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
+            rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
+            rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
+            rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
+            # rec_representation = rec_representation.unsqueeze(-1)
+            return (
+                rec_spec_batch_one,
+                rec_spec_batch_two,
+                rec_normal_batch_one,
+                rec_normal_batch_two,
+                # rec_representation,
+                normal_inv_representation,
+                spec_inv_representation,
+                normal_acs_representation,
+                spec_acs_representation,
+            )
+
+        elif step == "pred":
+            _, _, acs_representation = self.backbone(
+                pred_batch_view,
+            )
+            pred_representation = acs_representation[1]
+
+            pred_output = self.pred_fc(pred_representation)
+            return pred_output
+
+        elif step == "cls":
+            _, _, cls_representation = self.backbone(
+                cls_batch_view,
+            )
+            cls_logits = self.cls_fc(cls_representation)
+            return cls_logits
+
+        else:
+            # linear evaluation
+            if return_embedding:
+                return self.backbone(clr_batch_view_1)

@@ -19,11 +19,12 @@ DATASET:
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "CurrentCLR"
+  TYPE: "CurrentSimCLR"
   ARGS:
     BACKBONE: "eegconvnet"
     SIAMESE: True
     USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    N_FEATURES: 256 # backbone output feature dimension
     HIDDEN_LAYER: -1
     PROJECTION_DIM: 256
     PROJECTION_HIDDEN_SIZE: 2048
@@ -34,11 +35,13 @@ MODEL:
     PRED_WEIGHT: 0.1
     # SOURCE_CHANNELS: 36
   CRITERION:
-    TYPE: "RegressionLoss"
+    TYPE: "NT_Xent"
+    ARGS:
+      TEMPERATURE: 0.5
       # SOURCE_CHANNELS: 36
 SOLVER:
-  TRAINER: "current"
-  BATCH_SIZE: 200
+  TRAINER: "currentsimclr"
+  BATCH_SIZE: 500
   EPOCHS: 10
   LR: 0.001
   SCHEDULER:

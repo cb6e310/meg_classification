@@ -21,13 +21,11 @@ class AutoAUG(Module):
             timeshift(),
             jitter(),
             scaling(),
-            window_warp(),
         ]
 
         self.normal_augs_wo_spec = [
             crop(resize=cfg.DATASET.POINTS),
             timeshift(),
-            window_warp(),
         ]
 
         self.sensitive_base_augs = [

@@ -244,11 +244,11 @@ class UpSampling1DNet(nn.Module):
 
 
 class ConvDecoder(nn.Module):
-    def __init__(self, filter_size, channels=1, length=3000):
+    def __init__(self, input_channels, filter_size, channels=1, length=3000):
         super(ConvDecoder, self).__init__()
 
         self.decoder = nn.Sequential(
-            nn.Conv1d(256, 256, kernel_size=filter_size, padding="same"),
+            nn.Conv1d(input_channels, 256, kernel_size=filter_size, padding="same"),
             nn.ReLU(),
             UpSampling1DNet(scale_factor=2),
             nn.Conv1d(256, 128, kernel_size=filter_size, padding="same"),

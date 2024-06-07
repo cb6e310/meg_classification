@@ -1,7 +1,7 @@
 EXPERIMENT:
-  NAME: "byol_linear_eval"
-  TAG: "baselines"
-  PROJECT: "baseline project"
+  NAME: "current_linear_eval"
+  TAG: "proposed"
+  PROJECT: "proposed project"
   DEBUG: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "train"
@@ -9,34 +9,34 @@ EXPERIMENT:
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
 DATASET:
-  ROOT: "/home/song/datasets/MEG"
-  TYPE: "CamCAN"
-  CHANNELS: 204
-  POINTS: 100
-  NUM_CLASSES: 2
+  ROOT: "/home/song/datasets/EEG"
+  TYPE: "sleepedf20v2"
+  CHANNELS: 1
+  POINTS: 3000
+  NUM_CLASSES: 5
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "BYOL"
+  TYPE: "CurrentSimCLR"
   ARGS:
-    BACKBONE: "varcnn"
+    BACKBONE: "eegconvnet"
     SIAMESE: True
-    N_FEATURES: 18000 # backbone output feature dimension
-    PROJECTION_DIM: 128
+    N_FEATURES: 256 # backbone output feature dimension
+    PROJECTION_DIM: 256 
     HIDDEN_LAYER: -1
     USE_MOMENTUM: True  # True for BYOL, False for SimSiam
-    PROJECTION_HIDDEN_SIZE: 4096
+    PROJECTION_HIDDEN_SIZE: 2048
     TAU_BASE: 0.996
     CLASSIFIER: "LinearClassifier"
-    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/byol_pretext_2024-06-04_01-59-44/checkpoints/epoch_29_0_chkp.tar"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/proposed project/current_pretext_2024-06-07_07-30-24/checkpoints/epoch_9_0_chkp.tar"
     # SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "CE"
 SOLVER:
   BATCH_SIZE: 512
-  EPOCHS: 400
-  LR: 0.5
+  EPOCHS: 800
+  LR: 0.01
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
-    MIN_LR: 0.001
+    MIN_LR: 0.0001

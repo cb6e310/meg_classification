@@ -86,7 +86,7 @@ class NT_Xent(nn.Module):
         # self.temperature = temperature
         # self.world_size = worNoneld_size
         self.batch_size = cfg.SOLVER.BATCH_SIZE
-        self.temperature = cfg.MODEL.ARGS.TEMPERATURE
+        self.temperature = cfg.MODEL.CRITERION.ARGS.TEMPERATURE
 
         self.criterion = nn.CrossEntropyLoss(reduction="sum")
         self.similarity_f = nn.CosineSimilarity(dim=2)
