@@ -49,7 +49,8 @@ class CurrentSimCLRTrainer:
         self.rec_criterion = torch.nn.L1Loss().cuda()
         self.orthogonal_criterion = OrthLoss().cuda()
         self.cls_criterion = torch.nn.CrossEntropyLoss().cuda()
-        self.pred_criterion = torch.nn.MSELoss().cuda()
+        # self.pred_criterion = torch.nn.MSELoss().cuda()
+        self.pred_criterion = torch.nn.BCEWithLogitsLoss().cuda()
 
         self.model = model
         self.aug = aug
@@ -586,8 +587,7 @@ class CurrentSimCLRTrainer:
 
         # forward
         pred_online_pred = self.model(step="pred", pred_batch_view=aug)
-
-        loss_pred = self.pred_criterion(pred_online_pred, labels)
+        loss_pred = self.pred_criterion(pred_online_pred, labels.float())
 
         loss_pred = loss_pred.mean()
         loss_pred = loss_pred * self.cfg.MODEL.ARGS.PRED_WEIGHT

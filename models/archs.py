@@ -927,7 +927,7 @@ class CurrentSimCLR(BaseNet):
             nn.Linear(128, 64),
             nn.BatchNorm1d(64),
             nn.ReLU(),
-            nn.Linear(64, 1),
+            nn.Linear(64, 2),
         )
 
         self.decoder = ConvDecoder(

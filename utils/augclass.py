@@ -222,6 +222,7 @@ class TimeReverse:
         # labels:0 for not reversed, 1 for reversed
         labels = torch.zeros(x.shape[0], dtype=torch.long)
         labels[applied_batch_idx] = 1
+        labels = torch.nn.functional.one_hot(labels, num_classes=2)
         return x, labels
 
 
@@ -236,6 +237,8 @@ class SignFlip:
         # labels:0 for not flipped, 1 for flipped
         labels = torch.zeros(x.shape[0], dtype=torch.long)
         labels[applied_batch_idx] = 1
+        # one-hot encoding
+        labels = torch.nn.functional.one_hot(labels, num_classes=2)
         return x, labels
 
 
