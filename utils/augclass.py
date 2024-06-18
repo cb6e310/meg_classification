@@ -54,16 +54,14 @@ class jitter:
 
 
 class scaling:
-    def __init__(self, sigma=0.5) -> None:
-        self.sigma = sigma
+    def __init__(self, max_sigma=0.5) -> None:
+        self.max_sigma = max_sigma
 
     def __call__(self, x):
-        # random scaling for each sample in the batch
-        factor = torch.normal(
-            mean=1.0, std=self.sigma, size=(x.shape[0], x.shape[2])
-        ).cuda()
+        # random scaling for each sample in the batch from 1-max_sigma to 1+max_sigma
+        factor = (torch.rand(x.shape[0], device=x.device)*2-1) * self.max_sigma + 1
         res = torch.multiply(x, torch.unsqueeze(factor, 1))
-        return res
+        return res, factor
 
 
 class timeshift:
@@ -172,43 +170,6 @@ class window_warp:
                 ).T
 
         return torch.from_numpy(ret).type(torch.FloatTensor).cuda()
-        # begin = time.time()
-        # B, T, D = x_torch.size()
-        # x = x_torch
-        # # https://halshs.archives-ouvertes.fr/halshs-01357973/document
-        # warp_scales = np.random.choice(self.scales, B)
-        # warp_size = np.ceil(self.window_ratio * T).astype(int)
-        # window_steps = np.arange(warp_size)
-
-        # window_starts = np.random.randint(low=1, high=T - warp_size - 1, size=(B)).astype(
-        #     int
-        # )
-        # window_ends = (window_starts + warp_size).astype(int)
-
-        # rets = []
-
-        # for i in range(x.shape[0]):
-        #     window_seg = torch.unsqueeze(x[i, window_starts[i] : window_ends[i], :], 0)
-        #     window_seg_inter = interpolate(
-        #         window_seg,
-        #         int(warp_size * warp_scales[i]),
-        #         mode="linear",
-        #         align_corners=False,
-        #     )[0]
-        #     start_seg = x[i, : window_starts[i], :]
-        #     end_seg = x[i, window_ends[i] :, :]
-        #     ret_i = torch.cat([start_seg, window_seg_inter, end_seg], -1)
-        #     ret_i_inter = interpolate(
-        #         torch.unsqueeze(ret_i, 0), T, mode="linear", align_corners=False
-        #     )
-        #     rets.append(ret_i_inter)
-
-        # ret = torch.cat(rets, 0)
-        # # end = time.time()
-        # # old_window_warp()(x_torch)
-        # # end2 = time.time()
-        # # print(end-begin,end2-end)
-        # return ret
 
 
 class TimeReverse:
@@ -269,17 +230,19 @@ class TimeShift:
         self.max_shift = max_shift
 
     def __call__(self, x):
-        batch_size, channels, length = x.size()
+        batch_size, length, channels = x.size()
         max_shift = int(self.max_shift * length)
         roll_lengths = torch.randint(-max_shift, max_shift + 1, (batch_size,))
 
         # Create an index tensor for rolling
         indices = (torch.arange(length).unsqueeze(0) - roll_lengths.unsqueeze(1)) % length
         indices = indices.unsqueeze(1).expand(batch_size, channels, -1)
-
+        indices = torch.transpose(indices, 1, 2)
         # Apply the roll using advanced indexing
-        rolled_batch = torch.gather(x, 2, indices)
+        rolled_batch = torch.gather(x, 1, indices.cuda())
 
+        # turn roll_lengths to proportion
+        roll_lengths = roll_lengths / length
         return rolled_batch, roll_lengths
 
 
@@ -307,4 +270,34 @@ class FrequencyShift:
         fined_x = torch.cat(fined_x, 0)
         labels = torch.cat(labels, 0)
 
-        return fined_x, labels
+        return fined_x.cuda(), labels
+
+
+class Drift:
+    def __init__(self, max_drift=0.2, max_drift_points=10, fined_factor=10):
+        self.max_drift = max_drift
+        self.max_drift_points = max_drift_points
+        self.fined_factor = fined_factor
+
+    def __call__(self, x):
+        labels = torch.zeros(x.shape[0], dtype=torch.long)
+        fined_size = x.shape[0] // self.fined_factor+1
+        # drift_points = torch.randint(1, self.max_drift_points + 1, (self.fined_factor,))
+        # drift_points = drift_points.reshape(-1, 1)
+        labels = list(torch.split(labels, fined_size, dim=0))
+        # split x into fine_factor numbers of batches
+        fined_x = list(torch.split(x.cpu(), fined_size, dim=0))
+        # drift_points = torch.randint(1, self.max_drift_points + 1, (len(fined_x),))
+        drift_points = torch.range(1, self.max_drift_points+1)
+        max_drifts = torch.rand(len(fined_x))*self.max_drift
+        for i in np.arange(len(fined_x)):
+            fined_x[i] = torch.from_numpy(
+                tsaug.Drift(
+                    max_drifts[i].item(), drift_points.int().tolist(), kind="multiplicative"
+                ).augment(fined_x[i].numpy())
+            )
+            labels[i] = torch.full(labels[i].size(), drift_points[i])
+
+        fined_x = torch.cat(fined_x, 0)
+        labels = torch.cat(labels, 0)
+        return fined_x.cuda(), labels

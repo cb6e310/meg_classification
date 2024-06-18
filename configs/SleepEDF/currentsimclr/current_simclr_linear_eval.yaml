@@ -28,7 +28,7 @@ MODEL:
     PROJECTION_HIDDEN_SIZE: 2048
     TAU_BASE: 0.996
     CLASSIFIER: "LinearClassifier"
-    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/proposed project/current_pretext_2024-06-08_02-15-13/checkpoints/epoch_9_0_chkp.tar"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/proposed project/current_pretext_2024-06-18_08-30-44/checkpoints/epoch_9_0_chkp.tar"
     # SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "CE"

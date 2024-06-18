@@ -63,9 +63,14 @@ class AutoAUG(Module):
         return output
 
     @staticmethod
-    def random_frequencyshift(x, sfreq):
-        sfreq
-        output = FrequencyShift(sfreq=100)(x)
+    def random_frequencyshift(x, sfreq=100):
+
+        output = FrequencyShift(sfreq=sfreq)(x)
+        return output
+
+    @staticmethod
+    def random_drift(x, max_drift_points=20):
+        output = Drift(max_drift=0.4, max_drift_points=max_drift_points)(x)
         return output
 
     def forward(self, x, step=None):
@@ -74,7 +79,11 @@ class AutoAUG(Module):
 
         if self.training and step is None and self.cfg.MODEL.TYPE == "current":
             raise ValueError("step is required during training")
-        if self.training and self.cfg.MODEL.TYPE != "CurrentCLR" and self.cfg.MODEL.TYPE != "CurrentSimCLR":
+        if (
+            self.training
+            and self.cfg.MODEL.TYPE != "CurrentCLR"
+            and self.cfg.MODEL.TYPE != "CurrentSimCLR"
+        ):
             transform = Compose(self.all_augs)
             aug1 = transform(x)
             aug2 = transform(x)
@@ -87,10 +96,11 @@ class AutoAUG(Module):
             base_aug = Compose(self.sensitive_base_augs)
             x1 = base_aug(x)
             x2 = base_aug(x)
-            # aug1=x1
-            # aug2=x2
-            aug1, _ = self.random_jitter(x1)
-            aug2, _ = self.random_jitter(x2)
+            aug1 = x1
+            aug2 = x2
+
+            # aug1, _ = self.random_signflip(x1)
+            # aug2, _ = self.random_signflip(x2)
             aug1 = aug1.transpose(1, 2)
             aug2 = aug2.transpose(1, 2)
             return aug1, aug2
@@ -131,7 +141,7 @@ class AutoAUG(Module):
         elif step == "pred":
             # transform = Compose(self.normal_augs_wo_spec)
             # x = transform(x)
-            spec_x, labels = self.random_timereverse(x)
+            spec_x, labels = self.random_signflip(x)
             spec_x = spec_x.transpose(1, 2)
             return spec_x, labels
 

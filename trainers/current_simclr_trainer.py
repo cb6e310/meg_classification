@@ -380,7 +380,7 @@ class CurrentSimCLRTrainer:
 
         loss_clr = self.clr_step(x)
 
-        # loss_pred = self.pred_step(x)
+        loss_pred = self.pred_step(x)
 
         # loss_cls = self.cls_step(x)
 

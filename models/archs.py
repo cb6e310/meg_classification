@@ -958,8 +958,8 @@ class CurrentSimCLR(BaseNet):
                 h_j = self.backbone(clr_batch_view_2)
             else:
 
-                _, h_i, _ = self.backbone(clr_batch_view_1)
-                _, h_j, _ = self.backbone(clr_batch_view_2)
+                h_i, _, _ = self.backbone(clr_batch_view_1)
+                h_j, _, _ = self.backbone(clr_batch_view_2)
                 h_i = h_i[1]
                 h_j = h_j[1]
             z_i = F.normalize(self.projection_head(h_i), dim=-1)
@@ -1020,7 +1020,7 @@ class CurrentSimCLR(BaseNet):
             )
 
         elif step == "pred":
-            _, _, acs_representation = self.backbone(
+            acs_representation, _, _ = self.backbone(
                 pred_batch_view,
             )
             pred_representation = acs_representation[1]
