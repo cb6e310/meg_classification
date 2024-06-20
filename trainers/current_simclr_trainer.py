@@ -49,8 +49,8 @@ class CurrentSimCLRTrainer:
         self.rec_criterion = torch.nn.L1Loss().cuda()
         self.orthogonal_criterion = OrthLoss().cuda()
         self.cls_criterion = torch.nn.CrossEntropyLoss().cuda()
-        # self.pred_criterion = torch.nn.MSELoss().cuda()
-        self.pred_criterion = torch.nn.BCEWithLogitsLoss().cuda()
+        self.pred_criterion = torch.nn.MSELoss().cuda()
+        # self.pred_criterion = torch.nn.BCEWithLogitsLoss().cuda()
 
         self.model = model
         self.aug = aug
@@ -380,7 +380,7 @@ class CurrentSimCLRTrainer:
 
         loss_clr = self.clr_step(x)
 
-        loss_pred = self.pred_step(x)
+        # loss_pred = self.pred_step(x)
 
         # loss_cls = self.cls_step(x)
 

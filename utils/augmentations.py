@@ -38,6 +38,11 @@ class AutoAUG(Module):
         return output
 
     @staticmethod
+    def random_scaling(x, max_sigma=0.5):
+        output = scaling(max_sigma=max_sigma)(x)
+        return output
+
+    @staticmethod
     def random_timereverse(x):
         output = TimeReverse()(x)
         return output
@@ -57,10 +62,6 @@ class AutoAUG(Module):
         output = TimeShift(max_shift=0.4)(x)
         return output
 
-    @staticmethod
-    def random_scaling(x):
-        output = Scaling()(x)
-        return output
 
     @staticmethod
     def random_frequencyshift(x, sfreq=100):
@@ -99,8 +100,8 @@ class AutoAUG(Module):
             aug1 = x1
             aug2 = x2
 
-            # aug1, _ = self.random_signflip(x1)
-            # aug2, _ = self.random_signflip(x2)
+            # aug1, _ = self.random_scaling(x1)
+            # aug2, _ = self.random_scaling(x2)
             aug1 = aug1.transpose(1, 2)
             aug2 = aug2.transpose(1, 2)
             return aug1, aug2
@@ -141,7 +142,7 @@ class AutoAUG(Module):
         elif step == "pred":
             # transform = Compose(self.normal_augs_wo_spec)
             # x = transform(x)
-            spec_x, labels = self.random_signflip(x)
+            spec_x, labels = self.random_scaling(x)
             spec_x = spec_x.transpose(1, 2)
             return spec_x, labels
 

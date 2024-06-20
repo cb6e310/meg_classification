@@ -59,8 +59,9 @@ class scaling:
 
     def __call__(self, x):
         # random scaling for each sample in the batch from 1-max_sigma to 1+max_sigma
-        factor = (torch.rand(x.shape[0], device=x.device)*2-1) * self.max_sigma + 1
-        res = torch.multiply(x, torch.unsqueeze(factor, 1))
+        factor = (torch.rand(x.shape[0], device=x.device) * 2 - 1) * self.max_sigma + 1
+        # res = torch.multiply(x, torch.unsqueeze(factor, 1))
+        res = x * factor.unsqueeze(1).unsqueeze(1)
         return res, factor
 
 
@@ -281,19 +282,21 @@ class Drift:
 
     def __call__(self, x):
         labels = torch.zeros(x.shape[0], dtype=torch.long)
-        fined_size = x.shape[0] // self.fined_factor+1
+        fined_size = x.shape[0] // self.fined_factor + 1
         # drift_points = torch.randint(1, self.max_drift_points + 1, (self.fined_factor,))
         # drift_points = drift_points.reshape(-1, 1)
         labels = list(torch.split(labels, fined_size, dim=0))
         # split x into fine_factor numbers of batches
         fined_x = list(torch.split(x.cpu(), fined_size, dim=0))
         # drift_points = torch.randint(1, self.max_drift_points + 1, (len(fined_x),))
-        drift_points = torch.range(1, self.max_drift_points+1)
-        max_drifts = torch.rand(len(fined_x))*self.max_drift
+        drift_points = torch.range(1, self.max_drift_points + 1)
+        max_drifts = torch.rand(len(fined_x)) * self.max_drift
         for i in np.arange(len(fined_x)):
             fined_x[i] = torch.from_numpy(
                 tsaug.Drift(
-                    max_drifts[i].item(), drift_points.int().tolist(), kind="multiplicative"
+                    max_drifts[i].item(),
+                    drift_points.int().tolist(),
+                    kind="multiplicative",
                 ).augment(fined_x[i].numpy())
             )
             labels[i] = torch.full(labels[i].size(), drift_points[i])
