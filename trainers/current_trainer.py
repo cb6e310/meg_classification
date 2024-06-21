@@ -381,7 +381,7 @@ class CurrentTrainer:
 
         loss_pred = self.pred_step(x)
 
-        loss_cls = self.cls_step(x)
+        # loss_cls = self.cls_step(x)
 
         loss_total = loss_clr + loss_cls + loss_total_rec
 
@@ -508,9 +508,9 @@ class CurrentTrainer:
                 aug_1[0],
                 aug_2[0],
                 rec_spec_batch_one[0],
-                rec_spec_batch_two[0],
-                rec_normal_batch_one[0],
-                rec_normal_batch_two[0],
+                # rec_spec_batch_two[0],
+                # rec_normal_batch_one[0],
+                # rec_normal_batch_two[0],
                 # rec_representation[0],
             ),
             dim=0,
@@ -548,29 +548,29 @@ class CurrentTrainer:
 
         return loss_clr
 
-    def cls_step(self, x):
-        # cls step
-        self.optimizer.zero_grad()
-        x = x.float().cuda()
-        x = torch.squeeze(x, -1)
-        aug, labels = self.aug(x, step="cls")
-        aug = aug.unsqueeze(-1).cuda()
-        labels = labels.cuda()
+    # def cls_step(self, x):
+    #     # cls step
+    #     self.optimizer.zero_grad()
+    #     x = x.float().cuda()
+    #     x = torch.squeeze(x, -1)
+    #     aug, labels = self.aug(x, step="cls")
+    #     aug = aug.unsqueeze(-1).cuda()
+    #     labels = labels.cuda()
 
-        # forward
-        cls_online_pred = self.model(step="cls", cls_batch_view=aug)
+    #     # forward
+    #     cls_online_pred = self.model(step="cls", cls_batch_view=aug)
 
-        loss_cls = self.cls_criterion(cls_online_pred, labels)
+    #     loss_cls = self.cls_criterion(cls_online_pred, labels)
 
-        loss_cls = loss_cls.mean()
-        loss_cls = loss_cls * self.cfg.MODEL.ARGS.CLS_WEIGHT
+    #     loss_cls = loss_cls.mean()
+    #     loss_cls = loss_cls * self.cfg.MODEL.ARGS.CLS_WEIGHT
 
-        # backward
-        self.optimizer.zero_grad()
-        loss_cls.backward()
-        self.optimizer.step()
+    #     # backward
+    #     self.optimizer.zero_grad()
+    #     loss_cls.backward()
+    #     self.optimizer.step()
 
-        return loss_cls
+    #     return loss_cls
 
     def pred_step(self, x):
         # pred step

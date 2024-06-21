@@ -20,15 +20,14 @@ class AutoAUG(Module):
             crop(resize=cfg.DATASET.POINTS),
             timeshift(),
             jitter(),
-            scaling(),
+            # scaling(),
         ]
-        
 
         self.normal_augs_wo_spec = [
             crop(resize=cfg.DATASET.POINTS),
             TimeReverse(random=False),
-            timeshift(random=False),
-            SignFlip(random=False)
+            TimeShift(random=False),
+            SignFlip(random=False),
         ]
 
         self.sensitive_base_augs = [
@@ -64,7 +63,6 @@ class AutoAUG(Module):
     def random_timeshift(x):
         output = TimeShift(max_shift=0.4)(x)
         return output
-
 
     @staticmethod
     def random_frequencyshift(x, sfreq=100):
@@ -118,7 +116,6 @@ class AutoAUG(Module):
             aug2 = aug2.transpose(1, 2)
 
             return aug1, aug2
-
 
         elif step == "pred":
             # transform = Compose(self.normal_augs_wo_spec)

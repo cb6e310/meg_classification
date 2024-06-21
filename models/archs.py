@@ -669,7 +669,7 @@ class CurrentNetWrapper(nn.Module):
 
     def forward(self, x, return_projection=True):
         representations = self.get_representation(x)
-        representation = representations[0]
+        representation = representations[0][0]
         inv4rec = representations[1][0]
         inv4clr = representations[1][1]
         acs = representations[2]
@@ -734,7 +734,7 @@ class CurrentCLR(BaseNet):
         )
 
         self.decoder = ConvDecoder(
-            input_channels=self.cfg.DATASET.CHANNELS,
+            input_channels=projection_size,
             filter_size=3,
             channels=channels,
             length=feature_size,

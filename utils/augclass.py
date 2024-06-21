@@ -239,8 +239,9 @@ class FTSurrogate:
 
 
 class TimeShift:
-    def __init__(self, max_shift=0.1):
+    def __init__(self, max_shift=0.1, random=False):
         self.max_shift = max_shift
+        self.random=random
 
     def __call__(self, x):
         batch_size, length, channels = x.size()
@@ -256,7 +257,10 @@ class TimeShift:
 
         # turn roll_lengths to proportion
         roll_lengths = roll_lengths / length
-        return rolled_batch, roll_lengths
+        if self.random:
+            return rolled_batch, roll_lengths
+        else:
+            return rolled_batch
 
 
 class FrequencyShift:
