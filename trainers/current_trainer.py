@@ -371,17 +371,17 @@ class CurrentTrainer:
         loss_orthogonal = torch.tensor(0, dtype=torch.float32).cuda()
         loss_pred = torch.tensor(0, dtype=torch.float32).cuda()
         process_imgs = torch.tensor(0, dtype=torch.float32).cuda()
-        # _, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = self.rec_step(
-        #     x
-        # )
+        _, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = self.rec_step(
+            x
+        )
 
         loss_total_rec = loss_rec_spec + loss_rec_normal
 
         loss_clr = self.clr_step(x)
 
-        # loss_pred = self.pred_step(x)
+        loss_pred = self.pred_step(x)
 
-        # loss_cls = self.cls_step(x)
+        loss_cls = self.cls_step(x)
 
         loss_total = loss_clr + loss_cls + loss_total_rec
 
@@ -465,38 +465,35 @@ class CurrentTrainer:
         self.optimizer.zero_grad()
         x = x.float().cuda()
         x = torch.squeeze(x, -1)
-        aug_spec, aug_normal = self.aug(x, step="rec")
-        aug_spec = aug_spec.unsqueeze(-1)
-        aug_normal = aug_normal.unsqueeze(-1)
+        aug_1, aug_2 = self.aug(x, step="rec")
+        aug_1 = aug_1.unsqueeze(-1)
+        aug_2 = aug_2.unsqueeze(-1)
 
         # forward
         (
             rec_spec_batch_one,
-            rec_spec_batch_two,
-            rec_normal_batch_one,
-            rec_normal_batch_two,
+            # rec_spec_batch_two,
+            # rec_normal_batch_one,
+            # rec_normal_batch_two,
             # rec_representation,
-            normal_inv_representation,
-            spec_inv_representation,
-            normal_acs_representation,
-            spec_acs_representation,
+            # inv_representation_2,
+            inv_representation_1,
+            # acs_representation_2,
+            acs_representation_1,
         ) = self.model(
-            step="rec", rec_batch_view_spec=aug_spec, rec_batch_view_normal=aug_normal
+            step="rec", rec_batch_view_1=aug_1, rec_batch_view_2=aug_2
         )
 
-        loss_rec_spec = self.rec_criterion(rec_spec_batch_one, aug_spec)
-        +self.rec_criterion(rec_spec_batch_two, aug_spec)
+        loss_rec_spec = self.rec_criterion(rec_spec_batch_one, aug_1)
+        # +self.rec_criterion(rec_spec_batch_two, aug_1)
 
-        loss_rec_normal = self.rec_criterion(rec_normal_batch_one, aug_normal)
-        +self.rec_criterion(rec_normal_batch_two, aug_normal)
+        # loss_rec_normal = self.rec_criterion(rec_normal_batch_one, aug_2)
+        # +self.rec_criterion(rec_normal_batch_two, aug_2)
 
-        loss_orthogonal = self.orthogonal_criterion(
-            normal_inv_representation, normal_acs_representation
-        )
-        +self.orthogonal_criterion(spec_inv_representation, spec_acs_representation)
+        loss_orthogonal=self.orthogonal_criterion(inv_representation_1, acs_representation_1)
 
         loss_total = (
-            self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_normal + loss_rec_spec)
+            self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_spec)
             + loss_orthogonal
         )
 
@@ -508,8 +505,8 @@ class CurrentTrainer:
         process_imgs = torch.cat(
             (
                 x.unsqueeze(-1)[0],
-                aug_spec[0],
-                aug_normal[0],
+                aug_1[0],
+                aug_2[0],
                 rec_spec_batch_one[0],
                 rec_spec_batch_two[0],
                 rec_normal_batch_one[0],

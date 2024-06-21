@@ -207,9 +207,11 @@ class NetWrapper(nn.Module):
     def forward(self, x, return_projection=True):
         representations = self.get_representation(x)
         if type(self.net).__name__ == "EEGConvNetBackbone":
-            representation = representations[0]
+            representation = representations[0][1]
             inv_representation = representations[1]
             acs_representation = representations[2]
+            if not return_projection:
+                return representation, inv_representation, acs_representation
             # logger.debug(representation.shape)
         elif type(self.net).__name__ == "VARCNNBackbone":
             representation = representations[0][1]
@@ -217,6 +219,8 @@ class NetWrapper(nn.Module):
             acs_representation = representations[2]
             if not return_projection:
                 return representation, inv_representation, acs_representation
+        elif type(self.net).__name__ == "ResNet":
+            representation = representations
         if not return_projection:
             return representation
 
@@ -784,8 +788,8 @@ class CurrentCLR(BaseNet):
         step=None,
         clr_batch_view_1=None,
         clr_batch_view_2=None,
-        rec_batch_view_spec=None,
-        rec_batch_view_normal=None,
+        rec_batch_view_1=None,
+        rec_batch_view_2=None,
         cls_batch_view=None,
         pred_batch_view=None,
         return_embedding=False,
@@ -825,49 +829,49 @@ class CurrentCLR(BaseNet):
             )
 
         elif step == "rec":
-            representation, normal_inv_representation, normal_acs_representation = (
-                self.online_encoder(rec_batch_view_normal, return_projection=False)
-            )
-            _, spec_inv_representation, spec_acs_representation = self.online_encoder(
-                rec_batch_view_spec, return_projection=False
+            # representation, inv_representation_2, acs_representation_2 = (
+            #     self.online_encoder(rec_batch_view_2, return_projection=False)
+            # )
+            _, inv_representation_1, acs_representation_1 = self.online_encoder(
+                rec_batch_view_1, return_projection=False
             )
 
             # representation4rec = representation[0]
 
-            normal_acs_representation = normal_acs_representation[0]
-            spec_acs_representation = spec_acs_representation[0]
+            # acs_representation_2 = acs_representation_2[0]
+            acs_representation_1 = acs_representation_1[0]
 
             rec_spec_batch_one = self.decoder(
-                spec_inv_representation, spec_acs_representation
+                inv_representation_1, acs_representation_1
             )
 
-            rec_spec_batch_two = self.decoder(
-                normal_inv_representation, spec_acs_representation
-            )
+            # rec_spec_batch_two = self.decoder(
+            #     inv_representation_2, acs_representation_1
+            # )
 
-            rec_normal_batch_one = self.decoder(
-                normal_inv_representation, normal_acs_representation
-            )
+            # rec_normal_batch_one = self.decoder(
+            #     inv_representation_2, acs_representation_2
+            # )
 
-            rec_normal_batch_two = self.decoder(
-                spec_inv_representation, normal_inv_representation
-            )
+            # rec_normal_batch_two = self.decoder(
+            #     inv_representation_1, acs_representation_2
+            # )
 
             rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
-            rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
-            rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
-            rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
+            # rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
+            # rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
+            # rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
             # rec_representation = rec_representation.unsqueeze(-1)
             return (
                 rec_spec_batch_one,
-                rec_spec_batch_two,
-                rec_normal_batch_one,
-                rec_normal_batch_two,
+                # rec_spec_batch_two,
+                # rec_normal_batch_one,
+                # rec_normal_batch_two,
                 # rec_representation,
-                normal_inv_representation,
-                spec_inv_representation,
-                normal_acs_representation,
-                spec_acs_representation,
+                # inv_representation_2,
+                inv_representation_1,
+                # acs_representation_2,
+                acs_representation_1,
             )
 
         elif step == "cls":

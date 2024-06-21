@@ -54,15 +54,19 @@ class jitter:
 
 
 class scaling:
-    def __init__(self, max_sigma=0.5) -> None:
+    def __init__(self, max_sigma=0.5, random=False) -> None:
         self.max_sigma = max_sigma
+        self.random = random
 
     def __call__(self, x):
         # random scaling for each sample in the batch from 1-max_sigma to 1+max_sigma
         factor = (torch.rand(x.shape[0], device=x.device) * 2 - 1) * self.max_sigma + 1
         # res = torch.multiply(x, torch.unsqueeze(factor, 1))
         res = x * factor.unsqueeze(1).unsqueeze(1)
-        return res, factor
+        if self.random:
+            return res, factor
+        else:
+            return res
 
 
 class timeshift:
@@ -174,8 +178,9 @@ class window_warp:
 
 
 class TimeReverse:
-    def __init__(self) -> None:
+    def __init__(self, random=False) -> None:
         self.aug = bdaug.TimeReverse(probability=1)
+        self.random = random
 
     def __call__(self, x):
         # select half of the samples in batch to reverse
@@ -185,12 +190,16 @@ class TimeReverse:
         labels = torch.zeros(x.shape[0], dtype=torch.long)
         labels[applied_batch_idx] = 1
         labels = torch.nn.functional.one_hot(labels, num_classes=2)
-        return x, labels
+        if self.random:
+            return x, labels
+        else:
+            return x
 
 
 class SignFlip:
-    def __init__(self) -> None:
+    def __init__(self, random) -> None:
         self.aug = bdaug.SignFlip(probability=1)
+        self.random = random
 
     def __call__(self, x):
         # select half of the samples in batch to flip
@@ -201,7 +210,10 @@ class SignFlip:
         labels[applied_batch_idx] = 1
         # one-hot encoding
         labels = torch.nn.functional.one_hot(labels, num_classes=2)
-        return x, labels
+        if self.random:
+            return x, labels
+        else:
+            return x
 
 
 class FTSurrogate:
