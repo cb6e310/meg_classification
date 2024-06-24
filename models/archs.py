@@ -458,6 +458,7 @@ class VARCNNBackbone(BaseNet):
         self.unsqueeze = Unsqueeze(-3)
         self.active = nn.LeakyReLU()
         self.pool = nn.MaxPool2d((1, 2), (1, 2))
+        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.dist_inv_head = nn.Sequential(
             nn.Conv2d(sources_channels, sources_channels, 3, 1, 1), nn.LeakyReLU()
         )
@@ -481,8 +482,10 @@ class VARCNNBackbone(BaseNet):
         out_inv_g = self.view(out_inv)
 
         out_acs = self.dist_acs_head(x)
-        out_acs_g = self.view(out_acs)
+        out_acs_g = self.avg_pool(out_acs)
+        out_acs_g = self.view(out_acs_g)
 
+        x = x.squeeze(-1)
         out = self.pool(x)
         out = self.view(out)
         out = self.dropout(out)
@@ -677,8 +680,8 @@ class CurrentNetWrapper(nn.Module):
         if not return_projection:
             return representation, inv4rec, acs
 
-        projector_inv = self._get_projector(inv4clr)
-        projection_inv = projector_inv(inv4clr)
+        projector_inv = self._get_projector(representation[1])
+        projection_inv = projector_inv(representation[1])
         return projection_inv
 
 
@@ -762,7 +765,7 @@ class CurrentCLR(BaseNet):
             torch.randn(1, channels, feature_size, 1, device=device),
             torch.randn(1, channels, feature_size, 1, device=device),
         )
-        print(self.net)
+        print(self.online_encoder)
 
     @singleton("target_encoder")
     def _get_target_encoder(self):
@@ -841,9 +844,7 @@ class CurrentCLR(BaseNet):
             # acs_representation_2 = acs_representation_2[0]
             acs_representation_1 = acs_representation_1[0]
 
-            rec_spec_batch_one = self.decoder(
-                inv_representation_1, acs_representation_1
-            )
+            rec_spec_batch_one = self.decoder(inv_representation_1, acs_representation_1)
 
             # rec_spec_batch_two = self.decoder(
             #     inv_representation_2, acs_representation_1
@@ -893,7 +894,9 @@ class CurrentCLR(BaseNet):
         else:
             # linear evaluation
             if return_embedding:
-                return self.online_encoder(clr_batch_view_1, return_projection=False)[0][1]
+                return self.online_encoder(clr_batch_view_1, return_projection=False)[0][
+                    1
+                ]
 
 
 class CurrentSimCLR(BaseNet):
@@ -982,7 +985,7 @@ class CurrentSimCLR(BaseNet):
             _, spec_inv_representation, spec_acs_representation = self.backbone(
                 rec_batch_view_spec
             )
-            
+
             # representation4rec = representation[0]
 
             normal_acs_representation = normal_acs_representation[0]

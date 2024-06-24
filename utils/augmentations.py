@@ -20,7 +20,7 @@ class AutoAUG(Module):
             crop(resize=cfg.DATASET.POINTS),
             timeshift(),
             jitter(),
-            window_warp(),
+            # window_warp(),
             # Normalize(),
             # scaling(max_sigma=0.2),
         ]
@@ -100,7 +100,7 @@ class AutoAUG(Module):
             and self.cfg.MODEL.TYPE != "CurrentCLR"
             and self.cfg.MODEL.TYPE != "CurrentSimCLR"
         ):
-            transform = Compose(self.all_augs)
+            transform = Compose(self.normal_augs_wo_spec)
             aug1 = transform(x)
             aug2 = transform(x)
             aug1 = aug1.transpose(1, 2)
@@ -113,12 +113,12 @@ class AutoAUG(Module):
             # base_aug = Compose(self.sensitive_base_augs)
             x1 = base_aug(x)
             x2 = base_aug(x)
-            # aug1=x1
+            aug1 = x1
             aug2 = x2
-            aug1, _ = self.random_jitter(x1, max_sigma=0.2)
+            # aug1, _ = self.random_jitter(x1, )
             # aug1 = self.Normalize(aug1)
             # aug2 = self.Normalize(aug2)
-            aug2, _ = self.random_jitter(x2, max_sigma=0.2)
+            # aug2, _ = self.random_jitter(x2, max_sigma=0.2)
 
             # aug1, _ = self.random_scaling(x1)
             # aug2, _ = self.random_scaling(x2)
@@ -127,9 +127,9 @@ class AutoAUG(Module):
             return aug1, aug2
 
         elif step == "rec":
-            aug1, _ = self.random_jitter(x, max_sigma=0.5)
+            aug1, _ = self.random_jitter(x, )
             # aug1=x
-            aug2, _ = self.random_jitter(x, max_sigma=0.5)
+            aug2, _ = self.random_jitter(x, )
             # aug1 = self.Normalize(aug1)
             # aug2 = self.Normalize(aug2)
             aug1 = aug1.transpose(1, 2)

@@ -43,7 +43,7 @@ CFG.EXPERIMENT.PROJECT = ""
 CFG.EXPERIMENT.NAME = ""
 CFG.EXPERIMENT.TAG = "default"
 CFG.EXPERIMENT.SEED = (
-    0  # Random number seed, which is beneficial to the repeatability of the experiment.
+    42  # Random number seed, which is beneficial to the repeatability of the experiment.
 )
 CFG.EXPERIMENT.TASK = "train"  # train, test, pretext
 CFG.EXPERIMENT.DEBUG = False  # Debug mode
