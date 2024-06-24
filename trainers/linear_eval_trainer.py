@@ -32,7 +32,15 @@ from utils.validate import validate
 
 class LinearEvalTrainer:
     def __init__(
-        self, experiment_name, model, classifier, criterion, train_loader, val_loader, cfg
+        self,
+        experiment_name,
+        model,
+        classifier,
+        criterion,
+        train_loader,
+        val_loader,
+        aug,
+        cfg,
     ):
         self.cfg = cfg
         self.train_loader = train_loader
@@ -45,6 +53,8 @@ class LinearEvalTrainer:
         self.best_acc = -1
         self.best_epoch = 0
         self.resume_epoch = -1
+
+        self.aug = aug
 
         # creating features from pretext model
         self.train_feat_loader, self.val_feat_loader = self.get_features(
@@ -188,7 +198,6 @@ class LinearEvalTrainer:
         labels_vector = []
         for step, data in enumerate(loader):
             x, y, _ = data
-
             x = x.cuda(non_blocking=True)
             x = x.float()
             # get encoding
@@ -196,10 +205,14 @@ class LinearEvalTrainer:
             #     x = torch.unsqueeze(x, -1)
             with torch.no_grad():
                 if self.cfg.MODEL.ARGS.BACKBONE == "eegconvnet":
-                    h = self.model(x, x, return_embedding=True, return_projection=False)[0][1]
+                    h = self.model(x, x, return_embedding=True, return_projection=False)
+                    
+                    
                 elif self.cfg.MODEL.ARGS.BACKBONE == "varcnn":
-                    h = self.model(x, x, return_embedding=True, return_projection=False)[0]
-                elif "resnet" in  self.cfg.MODEL.ARGS.BACKBONE:
+                    h = self.model(x, x, return_embedding=True, return_projection=False)[
+                        0
+                    ]
+                elif "resnet" in self.cfg.MODEL.ARGS.BACKBONE:
                     h = self.model(x, x, return_embedding=True, return_projection=False)
             h = h.detach()
 

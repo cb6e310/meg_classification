@@ -51,18 +51,18 @@ class SimpleDataset(Dataset):
                 self.x_data.std(),
             )
         )
-        # self.x_norm = (
-        #     StandardScaler()
-        #     .fit_transform(self.x_data.reshape(-1, self.x_data.shape[-1]))
-        #     .reshape(self.x_data.shape)
-        # )
+        self.x_norm = (
+            StandardScaler()
+            .fit_transform(self.x_data.reshape(-1, self.x_data.shape[-1]))
+            .reshape(self.x_data.shape)
+        )
         pass
         # self.aug1, self.aug2 = DataTransform(self.x_data)
         # logger.info("SiameseDataset: Augmentation done")
 
     def __getitem__(self, index):
         return (
-            self.x_data[index],
+            self.x_norm[index],
             self.y_data[index],
             index,
         )

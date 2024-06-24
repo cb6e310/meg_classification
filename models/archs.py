@@ -893,7 +893,7 @@ class CurrentCLR(BaseNet):
         else:
             # linear evaluation
             if return_embedding:
-                return self.online_encoder(clr_batch_view_1, return_projection=False)
+                return self.online_encoder(clr_batch_view_1, return_projection=False)[0][1]
 
 
 class CurrentSimCLR(BaseNet):
