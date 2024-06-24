@@ -669,7 +669,7 @@ class CurrentNetWrapper(nn.Module):
 
     def forward(self, x, return_projection=True):
         representations = self.get_representation(x)
-        representation = representations[0][0]
+        representation = representations[0]
         inv4rec = representations[1][0]
         inv4clr = representations[1][1]
         acs = representations[2]

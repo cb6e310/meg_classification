@@ -11,6 +11,13 @@ def totensor(x):
     return torch.from_numpy(x).type(torch.FloatTensor).cuda()
 
 
+class Normalize:
+    def __call__(self, batch):
+        mean = batch.mean(dim=(1, 2), keepdim=True)
+        std = batch.std(dim=(1, 2), keepdim=True)
+        return (batch - mean) / std
+
+
 class crop:
     def __init__(self, resize, crop_size=0.8) -> None:
         crop_size = int(resize * crop_size)

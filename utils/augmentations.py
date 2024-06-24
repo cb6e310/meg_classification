@@ -20,7 +20,9 @@ class AutoAUG(Module):
             crop(resize=cfg.DATASET.POINTS),
             timeshift(),
             jitter(),
-            # scaling(),
+            window_warp(),
+            Normalize()
+            # scaling(max_sigma=0.2),
         ]
 
         self.normal_augs_wo_spec = [
@@ -33,6 +35,8 @@ class AutoAUG(Module):
         self.sensitive_base_augs = [
             crop(resize=cfg.DATASET.POINTS),
         ]
+
+        self.Normalize = Compose([Normalize()] )
 
     @staticmethod
     def random_jitter(x, max_sigma=0.5):
@@ -76,7 +80,7 @@ class AutoAUG(Module):
         return output
 
     def forward(self, x, step=None):
-        # x shape: (batch, seq_len, channels)
+        # in aug, it will change x shape to (batch, seq_len, channels)
         x = x.transpose(1, 2)
 
         if self.training and step is None and self.cfg.MODEL.TYPE == "current":
@@ -99,19 +103,25 @@ class AutoAUG(Module):
             # base_aug = Compose(self.sensitive_base_augs)
             x1 = base_aug(x)
             x2 = base_aug(x)
-            aug1 = x1
-            aug2, _ = self.random_jitter(x2)
+            # aug1=x1
+            aug2=x2
+            aug1, _ = self.random_jitter(x1, max_sigma=0.2)
+            aug1 = self.Normalize(aug1)
+            aug2 = self.Normalize(aug2)
+            # aug2, _ = self.random_jitter(x2, max_sigma=0.2)
 
             # aug1, _ = self.random_scaling(x1)
-            # aug2, _ = self.random_scaling(x2)
+             # aug2, _ = self.random_scaling(x2)
             aug1 = aug1.transpose(1, 2)
             aug2 = aug2.transpose(1, 2)
             return aug1, aug2
 
         elif step == "rec":
-            aug1 = self.random_jitter(x, max_sigma=0.5)[0]
+            aug1,_ = self.random_jitter(x, max_sigma=0.5)
             # aug1=x
-            aug2 = self.random_jitter(x, max_sigma=0.5)[0]
+            aug2,_ = self.random_jitter(x, max_sigma=0.5)
+            aug1 = self.Normalize(aug1)
+            aug2 = self.Normalize(aug2)
             aug1 = aug1.transpose(1, 2)
             aug2 = aug2.transpose(1, 2)
 
@@ -121,6 +131,7 @@ class AutoAUG(Module):
             # transform = Compose(self.normal_augs_wo_spec)
             # x = transform(x)
             spec_x, labels = self.random_jitter(x)
+            spec_x = self.Normalize(spec_x)
             spec_x = spec_x.transpose(1, 2)
             return spec_x, labels
 
