@@ -38,15 +38,25 @@ class AutoAUG(Module):
 
         self.Normalize = Compose([Normalize()])
 
-    @staticmethod
-    def random_jitter(x, max_sigma=0.5):
-        output = jitter(sigma=max_sigma, random_sigma=True)(x)
-        return output
+    def random_jitter(
+        self,
+        x,
+    ):
+        mean = self.cfg.DATASET.MEAN
+        std = self.cfg.DATASET.STD
+        x_raw = x * std + mean
+        max_sigma = std * 0.2
+        output, labels = jitter(sigma=max_sigma, random_sigma=True)(x_raw)
+        output = (output - mean) / std
+        return output, labels
 
-    @staticmethod
-    def random_scaling(x, max_sigma=0.5):
-        output = scaling(max_sigma=max_sigma)(x)
-        return output
+    def random_scaling(self, x, max_sigma=0.5):
+        mean = self.cfg.DATASET.MEAN
+        std = self.cfg.DATASET.STD
+        x_raw = x * std + mean
+        output, labels = scaling(max_sigma=max_sigma)(x_raw)
+        output = (output - mean) / std
+        return output, labels
 
     @staticmethod
     def random_timereverse(x):
@@ -108,7 +118,7 @@ class AutoAUG(Module):
             aug1, _ = self.random_jitter(x1, max_sigma=0.2)
             # aug1 = self.Normalize(aug1)
             # aug2 = self.Normalize(aug2)
-            # aug2, _ = self.random_jitter(x2, max_sigma=0.2)
+            aug2, _ = self.random_jitter(x2, max_sigma=0.2)
 
             # aug1, _ = self.random_scaling(x1)
             # aug2, _ = self.random_scaling(x2)

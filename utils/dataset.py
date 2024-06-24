@@ -51,11 +51,12 @@ class SimpleDataset(Dataset):
                 self.x_data.std(),
             )
         )
+        scaler = StandardScaler()
         self.x_norm = (
-            StandardScaler()
-            .fit_transform(self.x_data.reshape(-1, self.x_data.shape[-1]))
+            scaler.fit_transform(self.x_data.reshape(-1, self.x_data.shape[-1]))
             .reshape(self.x_data.shape)
         )
+        logger.info("dataset scaler mean and std: {}, {}".format(scaler.mean_, scaler.scale_))
         pass
         # self.aug1, self.aug2 = DataTransform(self.x_data)
         # logger.info("SiameseDataset: Augmentation done")

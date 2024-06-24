@@ -982,7 +982,7 @@ class CurrentSimCLR(BaseNet):
             _, spec_inv_representation, spec_acs_representation = self.backbone(
                 rec_batch_view_spec
             )
-
+            
             # representation4rec = representation[0]
 
             normal_acs_representation = normal_acs_representation[0]

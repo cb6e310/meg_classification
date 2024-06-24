@@ -1,9 +1,11 @@
 from yacs.config import CfgNode as CN
 
+
 def log_msg(msg, mode="INFO"):
     color_map = {"INFO": 36, "TRAIN": 32, "EVAL": 31}
     msg = "\033[{}m[{}] {}\033[0m".format(color_map[mode], mode, msg)
     return msg
+
 
 def show_cfg(cfg):
     dump_cfg = CN()
@@ -14,6 +16,7 @@ def show_cfg(cfg):
     dump_cfg.LOG = cfg.LOG
     print(log_msg("CONFIG:\n{}".format(dump_cfg.dump()), "INFO"))
 
+
 def save_cfg(cfg, path):
     dump_cfg = CN()
     dump_cfg.EXPERIMENT = cfg.EXPERIMENT
@@ -23,6 +26,7 @@ def save_cfg(cfg, path):
     dump_cfg.LOG = cfg.LOG
     with open(path, "w") as f:
         f.write("CONFIG:\n{}".format(dump_cfg.dump()))
+
 
 CFG = CN()
 
@@ -39,16 +43,18 @@ CFG.EXPERIMENT.PROJECT = ""
 CFG.EXPERIMENT.NAME = ""
 CFG.EXPERIMENT.TAG = "default"
 CFG.EXPERIMENT.SEED = (
-    0
-)  # Random number seed, which is beneficial to the repeatability of the experiment.
+    0  # Random number seed, which is beneficial to the repeatability of the experiment.
+)
 CFG.EXPERIMENT.TASK = "train"  # train, test, pretext
 CFG.EXPERIMENT.DEBUG = False  # Debug mode
 CFG.EXPERIMENT.GPU_IDS = "0"  # List of GPUs used
 CFG.EXPERIMENT.WORLD_SIZE = 2  # Number of GPUs used
 CFG.EXPERIMENT.REPETITION_NUM = 5  # Number of repetition times
 CFG.EXPERIMENT.RESUME = False  # Resume training
-CFG.EXPERIMENT.CHECKPOINT = "" # 'Log_2020-03-19_19-53-27'
-CFG.EXPERIMENT.CHKP_IDX = None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+CFG.EXPERIMENT.CHECKPOINT = ""  # 'Log_2020-03-19_19-53-27'
+CFG.EXPERIMENT.CHKP_IDX = (
+    None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+)
 CFG.EXPERIMENT.CHECKPOINT_GAP = 50
 
 # Dataset
@@ -61,6 +67,8 @@ CFG.DATASET.NUM_CLASSES = 2
 CFG.DATASET.NUM_WORKERS = 2
 CFG.DATASET.TEST = CN()
 CFG.DATASET.TEST.BATCH_SIZE = 1024
+CFG.DATASET.MEAN = -0.1158333
+CFG.DATASET.STD = 20.67235566
 
 # Model
 CFG.MODEL = CN()
@@ -86,6 +94,3 @@ CFG.SOLVER.SCHEDULER = CN(new_allowed=True)
 CFG.LOG = CN()
 # CFG.LOG.SAVE_CHECKPOINT_FREQ = 20
 CFG.LOG.PREFIX = "/home/song/code/current/meg_classification/ssl/results/"
-
-
-
