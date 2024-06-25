@@ -285,7 +285,7 @@ class BYOLTrainer:
         x = x.float().cuda()
         batch_size = x.size(0)
         x = torch.squeeze(x, -1)
-        aug_1, aug_2 = self.aug(x)
+        aug_1, aug_2 = self.aug(x, step='clr')
         aug_1 = aug_1.unsqueeze(-1)
         aug_2 = aug_2.unsqueeze(-1)
 

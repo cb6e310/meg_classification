@@ -311,16 +311,16 @@ class BYOL(nn.Module):
         )
 
     def forward(
-        self, batch_view_1, batch_view_2, return_embedding=False, return_projection=True
+        self, clr_batch_view_1, clr_batch_view_2,step=None, return_embedding=False, return_projection=True
     ):
         # assert not (
         #     self.training and batch_view_1.shape[0] == 1
         # ), "you must have greater than 1 sample when training, due to the batchnorm in the projection layer"
 
         if return_embedding:
-            return self.online_encoder(batch_view_1, return_projection=return_projection)
+            return self.online_encoder(clr_batch_view_1, return_projection=return_projection)
 
-        views = torch.cat((batch_view_1, batch_view_2), dim=0)
+        views = torch.cat((clr_batch_view_1, clr_batch_view_2), dim=0)
 
         online_projections, _ = self.online_encoder(views)
         # logger.debug(online_projections.shape)

@@ -5,6 +5,7 @@ EXPERIMENT:
   DEBUG: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
+  LOG_IMAGES: False
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
@@ -27,6 +28,10 @@ MODEL:
     HIDDEN_LAYER: -1
     PROJECTION_HIDDEN_SIZE: 4096
     TAU_BASE: 0.996
+    WARMUP_EPOCHS: -1
+    REC_WEIGHT: 1
+    CLS_WEIGHT: 0.1
+    PRED_WEIGHT: 0.1
     # SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "RegressionLoss"

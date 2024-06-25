@@ -546,6 +546,9 @@ class CurrentTrainer:
         loss_clr.backward()
         self.optimizer.step()
 
+        if self.cfg.MODEL.ARGS.USE_MOMENTUM:
+            self.model.update_moving_average()
+
         return loss_clr
 
     # def cls_step(self, x):

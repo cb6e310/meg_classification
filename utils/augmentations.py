@@ -95,17 +95,17 @@ class AutoAUG(Module):
 
         if self.training and step is None and self.cfg.MODEL.TYPE == "current":
             raise ValueError("step is required during training")
-        if (
-            self.training
-            and self.cfg.MODEL.TYPE != "CurrentCLR"
-            and self.cfg.MODEL.TYPE != "CurrentSimCLR"
-        ):
-            transform = Compose(self.normal_augs_wo_spec)
-            aug1 = transform(x)
-            aug2 = transform(x)
-            aug1 = aug1.transpose(1, 2)
-            aug2 = aug2.transpose(1, 2)
-            return aug1, aug2
+        # if (
+        #     self.training
+        #     and self.cfg.MODEL.TYPE != "CurrentCLR"
+        #     and self.cfg.MODEL.TYPE != "CurrentSimCLR"
+        # ):
+        #     transform = Compose(self.normal_augs_wo_spec)
+        #     aug1 = transform(x)
+        #     aug2 = transform(x)
+        #     aug1 = aug1.transpose(1, 2)
+        #     aug2 = aug2.transpose(1, 2)
+        #     return aug1, aug2
 
         if step == "clr":
             base_aug = Compose(self.normal_augs_wo_spec)

@@ -38,11 +38,11 @@ MODEL:
       # SOURCE_CHANNELS: 36
 SOLVER:
   TRAINER: "current"
-  BATCH_SIZE: 512 
+  BATCH_SIZE: 512
   EPOCHS: 40
-  LR: 0.01
+  LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"
-    GAMMA: 0.95
+    GAMMA: 0.99
     MIN_LR: 0.0001
 
