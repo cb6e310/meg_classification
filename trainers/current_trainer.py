@@ -54,6 +54,7 @@ class CurrentTrainer:
         self.model = model
         self.aug = aug
         self.tau_base = cfg.MODEL.ARGS.TAU_BASE
+        self.lambda_l1 = cfg.SOLVER.LAMBDA_L1
         self.warmup_epochs = cfg.MODEL.ARGS.WARMUP_EPOCHS
 
         # check model name is BYOL
@@ -379,7 +380,7 @@ class CurrentTrainer:
 
         loss_clr = self.clr_step(x)
 
-        # loss_pred = self.pred_step(x)
+        loss_pred = self.pred_step(x)
 
         # loss_cls = self.cls_step(x)
 
@@ -472,25 +473,26 @@ class CurrentTrainer:
         # forward
         (
             rec_spec_batch_one,
-            # rec_spec_batch_two,
-            # rec_normal_batch_one,
-            # rec_normal_batch_two,
+            rec_spec_batch_two,
+            rec_normal_batch_one,
+            rec_normal_batch_two,
             # rec_representation,
-            # inv_representation_2,
+            inv_representation_2,
             inv_representation_1,
-            # acs_representation_2,
+            acs_representation_2,
             acs_representation_1,
         ) = self.model(
             step="rec", rec_batch_view_1=aug_1, rec_batch_view_2=aug_2
         )
 
         loss_rec_spec = self.rec_criterion(rec_spec_batch_one, aug_1)
-        # +self.rec_criterion(rec_spec_batch_two, aug_1)
+        +self.rec_criterion(rec_spec_batch_two, aug_1)
 
-        # loss_rec_normal = self.rec_criterion(rec_normal_batch_one, aug_2)
-        # +self.rec_criterion(rec_normal_batch_two, aug_2)
+        loss_rec_normal = self.rec_criterion(rec_normal_batch_one, aug_2)
+        +self.rec_criterion(rec_normal_batch_two, aug_2)
 
         loss_orthogonal=self.orthogonal_criterion(inv_representation_1, acs_representation_1)
+        +self.orthogonal_criterion(inv_representation_2,acs_representation_2)
 
         loss_total = (
             self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_spec)
@@ -540,7 +542,10 @@ class CurrentTrainer:
         ) + self.clr_criterion(clr_online_pred_two, clr_target_proj_one)
 
         loss_clr = loss_clr.mean()
-
+        l1_reg = torch.tensor(0.).cuda()
+        for param in self.model.parameters():
+            l1_reg += torch.norm(param, 1)
+        loss_clr += self.lambda_l1 * l1_reg
         # backward
         self.optimizer.zero_grad()
         loss_clr.backward()

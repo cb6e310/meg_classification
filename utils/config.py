@@ -43,7 +43,7 @@ CFG.EXPERIMENT.PROJECT = ""
 CFG.EXPERIMENT.NAME = ""
 CFG.EXPERIMENT.TAG = "default"
 CFG.EXPERIMENT.SEED = (
-    42  # Random number seed, which is beneficial to the repeatability of the experiment.
+    44  # Random number seed, which is beneficial to the repeatability of the experiment.
 )
 CFG.EXPERIMENT.TASK = "train"  # train, test, pretext
 CFG.EXPERIMENT.DEBUG = False  # Debug mode
@@ -87,6 +87,7 @@ CFG.SOLVER.LR = 0.003
 # CFG.SOLVER.LR_DECAY_RATE = 0.1
 CFG.SOLVER.WEIGHT_DECAY = 0.0005
 CFG.SOLVER.MOMENTUM = 0.9
+CFG.SOLVER.LAMBDA_L1 = 0.0
 CFG.SOLVER.TYPE = "SGD"
 CFG.SOLVER.SCHEDULER = CN(new_allowed=True)
 

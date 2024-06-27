@@ -311,14 +311,21 @@ class BYOL(nn.Module):
         )
 
     def forward(
-        self, clr_batch_view_1, clr_batch_view_2,step=None, return_embedding=False, return_projection=True
+        self,
+        clr_batch_view_1,
+        clr_batch_view_2,
+        step=None,
+        return_embedding=False,
+        return_projection=True,
     ):
         # assert not (
         #     self.training and batch_view_1.shape[0] == 1
         # ), "you must have greater than 1 sample when training, due to the batchnorm in the projection layer"
 
         if return_embedding:
-            return self.online_encoder(clr_batch_view_1, return_projection=return_projection)
+            return self.online_encoder(
+                clr_batch_view_1, return_projection=return_projection
+            )
 
         views = torch.cat((clr_batch_view_1, clr_batch_view_2), dim=0)
 
@@ -479,11 +486,14 @@ class VARCNNBackbone(BaseNet):
         x = self.active(x)
 
         out_inv = self.dist_inv_head(x)
+        out_inv_g = self.avg_pool(out_inv)
         out_inv_g = self.view(out_inv)
+        out_inv_g = self.dropout(out_inv_g)
 
         out_acs = self.dist_acs_head(x)
         out_acs_g = self.avg_pool(out_acs)
         out_acs_g = self.view(out_acs_g)
+        out_acs_g = self.dropout(out_acs_g)
 
         x = x.squeeze(-1)
         out = self.pool(x)
@@ -737,7 +747,10 @@ class CurrentCLR(BaseNet):
         )
 
         self.decoder = ConvDecoder(
-            input_channels=projection_size,
+            input_channels=(
+                projection_size if "varcnn" not in 
+                    self.cfg.MODEL.ARGS.BACKBONE else 360
+            ),
             filter_size=3,
             channels=channels,
             length=feature_size,
@@ -746,7 +759,8 @@ class CurrentCLR(BaseNet):
 
         # regressive head
         self.pred_fc = nn.Sequential(
-            nn.Linear(projection_size, 128),
+            nn.Linear(projection_size if "varcnn" not in 
+                    self.cfg.MODEL.ARGS.BACKBONE else 360, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.Linear(128, 64),
@@ -832,46 +846,44 @@ class CurrentCLR(BaseNet):
             )
 
         elif step == "rec":
-            # representation, inv_representation_2, acs_representation_2 = (
-            #     self.online_encoder(rec_batch_view_2, return_projection=False)
-            # )
+            representation, inv_representation_2, acs_representation_2 = (
+                self.online_encoder(rec_batch_view_2, return_projection=False)
+            )
             _, inv_representation_1, acs_representation_1 = self.online_encoder(
                 rec_batch_view_1, return_projection=False
             )
 
             # representation4rec = representation[0]
 
-            # acs_representation_2 = acs_representation_2[0]
+            acs_representation_2 = acs_representation_2[0]
             acs_representation_1 = acs_representation_1[0]
 
             rec_spec_batch_one = self.decoder(inv_representation_1, acs_representation_1)
 
-            # rec_spec_batch_two = self.decoder(
-            #     inv_representation_2, acs_representation_1
-            # )
+            rec_spec_batch_two = self.decoder(inv_representation_2, acs_representation_1)
 
-            # rec_normal_batch_one = self.decoder(
-            #     inv_representation_2, acs_representation_2
-            # )
+            rec_normal_batch_one = self.decoder(
+                inv_representation_2, acs_representation_2
+            )
 
-            # rec_normal_batch_two = self.decoder(
-            #     inv_representation_1, acs_representation_2
-            # )
+            rec_normal_batch_two = self.decoder(
+                inv_representation_1, acs_representation_2
+            )
 
             rec_spec_batch_one = rec_spec_batch_one.unsqueeze(-1)
-            # rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
-            # rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
-            # rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
+            rec_spec_batch_two = rec_spec_batch_two.unsqueeze(-1)
+            rec_normal_batch_one = rec_normal_batch_one.unsqueeze(-1)
+            rec_normal_batch_two = rec_normal_batch_two.unsqueeze(-1)
             # rec_representation = rec_representation.unsqueeze(-1)
             return (
                 rec_spec_batch_one,
-                # rec_spec_batch_two,
-                # rec_normal_batch_one,
-                # rec_normal_batch_two,
+                rec_spec_batch_two,
+                rec_normal_batch_one,
+                rec_normal_batch_two,
                 # rec_representation,
-                # inv_representation_2,
+                inv_representation_2,
                 inv_representation_1,
-                # acs_representation_2,
+                acs_representation_2,
                 acs_representation_1,
             )
 

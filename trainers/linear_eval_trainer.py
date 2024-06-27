@@ -48,6 +48,7 @@ class LinearEvalTrainer:
         self.criterion = criterion
         self.model = model
         self.classifier = classifier
+        self.lambda_l1 = cfg.SOLVER.LAMBDA_L1
         self.optimizer = self.init_optimizer(cfg)
         self.scheduler = self.init_scheduler(cfg)
         self.best_acc = -1
@@ -209,9 +210,9 @@ class LinearEvalTrainer:
                     
                     
                 elif self.cfg.MODEL.ARGS.BACKBONE == "varcnn":
-                    h = self.model(x, x, return_embedding=True, return_projection=False)[
-                        0
-                    ]
+                    h = self.model(x, x, return_embedding=True, return_projection=False)
+                    
+                    
                 elif "resnet" in self.cfg.MODEL.ARGS.BACKBONE:
                     h = self.model(x, x, return_embedding=True, return_projection=False)
             h = h.detach()
@@ -364,6 +365,10 @@ class LinearEvalTrainer:
         loss = self.criterion(preds, target)
         loss = loss.mean()
 
+        l1_reg = torch.tensor(0.).cuda()
+        for param in self.model.parameters():
+            l1_reg += torch.norm(param, 1)
+        loss += self.lambda_l1 * l1_reg
         # backward
         loss.backward()
         self.optimizer.step()
