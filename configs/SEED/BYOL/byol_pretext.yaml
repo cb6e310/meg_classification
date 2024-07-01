@@ -1,41 +1,48 @@
 EXPERIMENT:
-  NAME: "simclr_linear_eval"
+  NAME: "byol_pretext"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True 
+  PROJECT: "baseline project"
+  DEBUG: False
   REPETITION_NUM: 1 # Number of repetition times
-  TASK: "train"
+  TASK: "pretext"
+  LOG_IMAGES: False
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  CHECKPOINT_GAP: 10
 DATASET:
   ROOT: "/home/song/datasets/MEG"
-  TYPE: "DecMeg"
+  TYPE: "CamCAN"
   CHANNELS: 204
-  POINTS: 250
+  POINTS: 100
   NUM_CLASSES: 2
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "SimCLR"
+  TYPE: "BYOL"
   ARGS:
     BACKBONE: "varcnn"
-    TEMPERATURE: 0.5
     SIAMESE: True
-    N_FEATURES:  4500 # backbone output feature dimension
-    PROJECTION_HIDDEN_SIZE: 4096
+    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
     PROJECTION_DIM: 128
-
-    CLASSIFIER: "LinearClassifier"
-    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_with_NTXent_2024-07-01_01-29-48/checkpoints/epoch_9_0_chkp.tar"
-    SOURCE_CHANNELS: 36
+    HIDDEN_LAYER: -1
+    PROJECTION_HIDDEN_SIZE: 4096
+    TAU_BASE: 0.996
+    WARMUP_EPOCHS: -1
+    REC_WEIGHT: 1
+    CLS_WEIGHT: 0.1
+    PRED_WEIGHT: 0.1
+    # SOURCE_CHANNELS: 36
   CRITERION:
-    TYPE: "CE"
+    TYPE: "RegressionLoss"
+      # SOURCE_CHANNELS: 36
 SOLVER:
+  TRAINER: "BYOL"
   BATCH_SIZE: 512
-  EPOCHS: 400
+  EPOCHS: 30
   LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
-    MIN_LR: 0.001
+    MIN_LR: 0.0001
+

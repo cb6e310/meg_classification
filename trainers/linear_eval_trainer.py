@@ -251,6 +251,9 @@ class LinearEvalTrainer:
 
     def train(self, repetition_id=0):
         epoch = 0
+        if self.cfg.EXPERIMENT.KNN==True:
+            validate(self.train_feat_loader, self.val_feat_loader, self.cfg)
+            return
         if self.resume_epoch != -1:
             epoch = self.resume_epoch + 1
 

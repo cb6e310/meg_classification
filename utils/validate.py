@@ -4,6 +4,10 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score
+
 
 def validate(val_loader, model):
     batch_time, losses, top1 = [AverageMeter() for _ in range(3)]
@@ -34,3 +38,19 @@ def validate(val_loader, model):
             pbar.update()
     pbar.close()
     return top1.avg, losses.avg
+
+def KNN_validate(train_loader, val_loader):
+    # train_loader, val_loader: feature, labels from dataset through encoder
+    # KNN
+    knn = KNeighborsClassifier(n_neighbors=1)
+    train_feature, train_label = train_loader.dataset.tensors
+    train_feature = train_feature.cpu().numpy()
+    train_label = train_label.cpu().numpy()
+    knn.fit(train_feature, train_label)
+
+    val_feature, val_label = val_loader.dataset.tensors
+    val_feature = val_feature.cpu().numpy()
+    val_label = val_label.cpu().numpy()
+    pred = knn.predict(val_feature)
+    acc = accuracy_score(val_label, pred)
+    return acc

@@ -325,7 +325,7 @@ class BYOL(nn.Module):
         if return_embedding:
             return self.online_encoder(
                 clr_batch_view_1, return_projection=return_projection
-            )
+            )[0]
 
         views = torch.cat((clr_batch_view_1, clr_batch_view_2), dim=0)
 
@@ -449,7 +449,7 @@ class VARCNNBackbone(BaseNet):
         points_length = cfg.DATASET.POINTS
         num_classes = cfg.DATASET.NUM_CLASSES
 
-        sources_channels = 360
+        sources_channels = cfg.MODEL.ARGS.SOURCE_CHANNELS
 
         Conv = VARConv
 
@@ -556,6 +556,7 @@ class SimCLR(BaseNet):
         backbone_name = cfg.MODEL.ARGS.BACKBONE
         projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
         n_features = cfg.MODEL.ARGS.N_FEATURES
+        projection_hidden_dim = cfg.MODEL.ARGS.PROJECTION_HIDDEN_SIZE
 
         if "resnet" in backbone_name:
             self.backbone = backbone_dict[backbone_name][0](pretrained=False)
@@ -568,10 +569,17 @@ class SimCLR(BaseNet):
                 nn.Linear(self.backbone.fc.in_features, projection_dim),
             )
             self.backbone.fc = nn.Identity()
-        elif "varcnn" in backbone_name:
+        elif "varcnn"  in backbone_name:
             self.backbone = backbone_dict[backbone_name][0](cfg)
             self.projection_head = nn.Sequential(
                 nn.Linear(n_features, projection_dim),
+            )
+        elif "eegconvnet" in backbone_name:
+            self.backbone = backbone_dict[backbone_name][0](cfg)
+            self.projection_head = nn.Sequential(
+                nn.Linear(n_features, projection_hidden_dim),
+                nn.ReLU(),
+                nn.Linear(projection_hidden_dim, projection_dim),
             )
         print(self.backbone)
 
@@ -583,8 +591,8 @@ class SimCLR(BaseNet):
         if "resnet" in self.cfg.MODEL.ARGS.BACKBONE:
             x_i = torch.unsqueeze(x_i, -1)
             x_j = torch.unsqueeze(x_j, -1)
-        h_i = self.backbone(x_i)
-        h_j = self.backbone(x_j)
+        h_i = self.backbone(x_i)[0][1]
+        h_j = self.backbone(x_j)[0][1]
         z_i = F.normalize(self.projection_head(h_i), dim=-1)
         z_j = F.normalize(self.projection_head(h_j), dim=-1)
         # logger.debug(z_i.shape)

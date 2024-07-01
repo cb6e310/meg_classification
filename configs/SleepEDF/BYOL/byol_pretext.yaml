@@ -9,6 +9,8 @@ EXPERIMENT:
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
   CHECKPOINT_GAP: 10
+  SEED: 43
+  GPU_ID: "0"
 DATASET:
   ROOT: "/home/song/datasets/EEG"
   TYPE: "sleepedf20"
@@ -22,7 +24,7 @@ MODEL:
   ARGS:
     BACKBONE: "eegconvnet"
     SIAMESE: True
-    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    USE_MOMENTUM: False # True for BYOL, False for SimSiam
     HIDDEN_LAYER: -1
     PROJECTION_DIM: 256
     PROJECTION_HIDDEN_SIZE: 2048

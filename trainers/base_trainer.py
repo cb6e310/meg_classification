@@ -156,16 +156,6 @@ class BaseTrainer:
         return scheduler
 
     def log(self, epoch, log_dict):
-        if not self.cfg.EXPERIMENT.DEBUG:
-            import wandb
-
-            # wandb.log({"current lr": lr})
-            wandb.log(log_dict)
-        if log_dict["test_acc"] > self.best_acc:
-            self.best_acc = log_dict["test_acc"]
-            self.best_epoch = epoch
-            if not self.cfg.EXPERIMENT.DEBUG:
-                wandb.run.summary["best_acc"] = self.best_acc
         # worklog.txt
         with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
             lines = ["epoch: {}\t".format(epoch)]
@@ -295,7 +285,10 @@ class BaseTrainer:
             
             batch_size = x.size(0)
 
-            aug_1, aug_2 = self.aug(x)
+            x = torch.squeeze(x, -1)
+            aug_1, aug_2 = self.aug(x, step="clr")
+            aug_1 = aug_1.unsqueeze(-1)
+            aug_2 = aug_2.unsqueeze(-1)
 
             # forward
             _, _, z_i, z_j = self.model(aug_1, aug_2)

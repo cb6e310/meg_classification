@@ -8,9 +8,11 @@ EXPERIMENT:
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  CHECKPOINT_GAP: 10
+  SEED: 46
 DATASET:
   ROOT: "/home/song/datasets/EEG"
-  TYPE: "sleepedf20"
+  TYPE: "sleepedf20v2"
   CHANNELS: 1
   POINTS: 3000
   NUM_CLASSES: 5
@@ -22,8 +24,9 @@ MODEL:
     BACKBONE: "eegconvnet"
     TEMPERATURE: 0.5
     SIAMESE: True
+    N_FEATURES: 256
     PROJECTION_DIM: 256
-    N_FEATURES: 2048
+    PROJECTION_HIDDEN_SIZE: 2048
     # SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "NT_Xent"
@@ -32,7 +35,7 @@ MODEL:
       # SOURCE_CHANNELS: 36
 SOLVER:
   BATCH_SIZE: 256
-  EPOCHS: 300
+  EPOCHS: 10
   LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"

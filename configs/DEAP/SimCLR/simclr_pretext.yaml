@@ -5,17 +5,16 @@ EXPERIMENT:
   DEBUG: False
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
-  RESUME : False  # Resume training
-  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
-  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  RESUME: False # Resume training
+  CHECKPOINT: "" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX: None # Choose index of checkpoint to start from. If None, uses the latest chkp
   CHECKPOINT_GAP: 10
-  SEED: 44
-  GPU_ID: "0"
+  SEED: 45
 DATASET:
-  ROOT: "/home/song/datasets/MEG"
-  TYPE: "CamCAN"
-  CHANNELS: 204
-  POINTS: 100
+  ROOT: "/home/song/datasets/EEG"
+  TYPE: "deap"
+  CHANNELS: 32
+  POINTS: 128
   NUM_CLASSES: 2
   TEST:
     BATCH_SIZE: 128
@@ -26,8 +25,8 @@ MODEL:
     TEMPERATURE: 0.5
     SIAMESE: True
     PROJECTION_DIM: 128
+    N_FEATURES: 2304
     PROJECTION_HIDDEN_SIZE: 4096
-    N_FEATURES: 1800
     SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "NT_Xent"
@@ -36,10 +35,9 @@ MODEL:
       # SOURCE_CHANNELS: 36
 SOLVER:
   BATCH_SIZE: 512
-  EPOCHS: 300
+  EPOCHS: 10
   LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
     MIN_LR: 0.0001
-
