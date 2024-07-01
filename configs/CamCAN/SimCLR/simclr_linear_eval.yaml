@@ -1,13 +1,14 @@
 EXPERIMENT:
   NAME: "simclr_linear_eval"
   TAG: "baselines"
-  PROJECT: "debug project"
-  DEBUG: True 
+  PROJECT: "baseline project"
+  DEBUG: False 
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "train"
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  KNN: True
 DATASET:
   ROOT: "/home/song/datasets/MEG"
   TYPE: "CamCAN"

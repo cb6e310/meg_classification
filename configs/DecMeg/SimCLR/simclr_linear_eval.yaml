@@ -8,6 +8,7 @@ EXPERIMENT:
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  KNN: True
 DATASET:
   ROOT: "/home/song/datasets/MEG"
   TYPE: "DecMeg"
@@ -25,9 +26,8 @@ MODEL:
     N_FEATURES:  4500 # backbone output feature dimension
     PROJECTION_HIDDEN_SIZE: 4096
     PROJECTION_DIM: 128
-
     CLASSIFIER: "LinearClassifier"
-    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_with_NTXent_2024-07-01_01-29-48/checkpoints/epoch_9_0_chkp.tar"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_with_NTXent_2024-07-01_01-29-05/checkpoints/epoch_9_0_chkp.tar"
     SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "CE"

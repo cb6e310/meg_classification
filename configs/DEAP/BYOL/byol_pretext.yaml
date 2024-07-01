@@ -6,9 +6,10 @@ EXPERIMENT:
   REPETITION_NUM: 1 # Number of repetition times
   TASK: "pretext"
   LOG_IMAGES: False
-  RESUME : False  # Resume training
-  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
-  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  RESUME: False # Resume training
+  CHECKPOINT: "" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX: None # Choose index of checkpoint to start from. If None, uses the latest chkp
+  SEED: 44
   CHECKPOINT_GAP: 10
 DATASET:
   ROOT: "/home/song/datasets/EEG"
@@ -23,7 +24,7 @@ MODEL:
   ARGS:
     BACKBONE: "varcnn"
     SIAMESE: True
-    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    USE_MOMENTUM: True # True for BYOL, False for SimSiam
     PROJECTION_DIM: 128
     HIDDEN_LAYER: -1
     PROJECTION_HIDDEN_SIZE: 4096
@@ -32,9 +33,10 @@ MODEL:
     REC_WEIGHT: 1
     CLS_WEIGHT: 0.1
     PRED_WEIGHT: 0.1
-    # SOURCE_CHANNELS: 36
+    SOURCE_CHANNELS: 36
   CRITERION:
-    TYPE: "RegressionLoss"
+    TYPE:
+      "RegressionLoss"
       # SOURCE_CHANNELS: 36
 SOLVER:
   TRAINER: "BYOL"
@@ -45,4 +47,3 @@ SOLVER:
     TYPE: "ExponentialLR"
     GAMMA: 0.9
     MIN_LR: 0.0001
-

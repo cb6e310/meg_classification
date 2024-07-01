@@ -27,7 +27,7 @@ from utils.config import (
 
 from loguru import logger
 
-from utils.validate import validate
+from utils.validate import validate, KNN_validate
 
 
 class LinearEvalTrainer:
@@ -252,8 +252,8 @@ class LinearEvalTrainer:
     def train(self, repetition_id=0):
         epoch = 0
         if self.cfg.EXPERIMENT.KNN==True:
-            validate(self.train_feat_loader, self.val_feat_loader, self.cfg)
-            return
+            knn_acc = KNN_validate(self.train_feat_loader, self.val_feat_loader)
+            logger.info("KNN accuracy: {}".format(knn_acc))
         if self.resume_epoch != -1:
             epoch = self.resume_epoch + 1
 
@@ -270,8 +270,8 @@ class LinearEvalTrainer:
         )
         with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
             writer.write(
-                "repetition_id:{}\tbest_acc:{:.4f}\tepoch:{}".format(
-                    repetition_id, float(self.best_acc), self.best_epoch
+                "repetition_id:{}\tbest_acc:{:.4f}\tepoch:{}\tknn_acc:{}".format(
+                    repetition_id, float(self.best_acc), self.best_epoch, knn_acc
                 )
             )
             writer.write(os.linesep + "-" * 25 + os.linesep)
