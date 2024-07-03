@@ -10,7 +10,7 @@ EXPERIMENT:
   CHECKPOINT : "proposed project/current_pretext_2024-05-25_11-14-32" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : 9  # Choose index of checkpoint to start from. If None, uses the latest chkp
   CHECKPOINT_GAP: 10
-  SEED: 43
+  SEED: 44
 DATASET:
   ROOT: "/home/song/datasets/EEG"
   TYPE: "sleepedf20"

@@ -53,7 +53,7 @@ class TSEncoder(nn.Module):
     def forward(
         self, x, mask=None, return_embedding=True, return_projection=False
     ):  # x: B x T x input_dims
-        x = x.transpose(1, 2).squeeze()
+        x = x.transpose(1, 2).squeeze(-1)
         nan_mask = ~x.isnan().any(axis=-1)
         x[~nan_mask] = 0
         x = self.input_fc(x)  # B x T x Ch
@@ -768,7 +768,7 @@ class CurrentCLR(BaseNet):
         # regressive head
         self.pred_fc = nn.Sequential(
             nn.Linear(projection_size if "varcnn" not in 
-                    self.cfg.MODEL.ARGS.BACKBONE else 360, 128),
+                    self.cfg.MODEL.ARGS.BACKBONE else  23040, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.Linear(128, 64),
@@ -903,7 +903,7 @@ class CurrentCLR(BaseNet):
             return cls_logits
 
         elif step == "pred":
-            _, _, acs_representation = self.online_encoder(
+            acs_representation, _, _ = self.online_encoder(
                 pred_batch_view, return_projection=False
             )
             pred_representation = acs_representation[1]

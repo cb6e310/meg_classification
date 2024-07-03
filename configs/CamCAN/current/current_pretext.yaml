@@ -10,6 +10,7 @@ EXPERIMENT:
   CHECKPOINT : "proposed project/current_pretext_2024-05-25_11-14-32" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : 9  # Choose index of checkpoint to start from. If None, uses the latest chkp
   CHECKPOINT_GAP: 10
+  SEED: 44
 DATASET:
   ROOT: "/home/song/datasets/MEG"
   TYPE: "CamCAN"
@@ -32,14 +33,14 @@ MODEL:
     REC_WEIGHT: 1
     CLS_WEIGHT: 0.1
     PRED_WEIGHT: 0.1
-    # SOURCE_CHANNELS: 36
+    SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "RegressionLoss"
       # SOURCE_CHANNELS: 36
 SOLVER:
   TRAINER: "current"
   BATCH_SIZE: 512
-  EPOCHS: 40
+  EPOCHS: 10
   LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"

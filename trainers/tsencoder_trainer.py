@@ -294,7 +294,10 @@ class TSEncoderTrainer:
         
         batch_size = x.size(0)
 
-        aug_1, aug_2 = self.aug(x)
+        x = torch.squeeze(x, -1)
+        aug_1, aug_2 = self.aug(x, step='clr')
+        aug_1 = aug_1.unsqueeze(-1)
+        aug_2 = aug_2.unsqueeze(-1)
 
         # forward
         z_1 = self.model(aug_1)
