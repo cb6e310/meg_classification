@@ -107,6 +107,8 @@ class TSEncoderTrainer:
             chosen_chkp = None
             print("Start from scratch.")
 
+        print(self.model)
+        
     def init_optimizer(self, cfg):
         if cfg.SOLVER.TYPE == "SGD":
             optimizer = optim.SGD(
@@ -313,7 +315,7 @@ class TSEncoderTrainer:
         train_meters["training_time"].update(time.time() - train_start_time)
         train_meters["losses"].update(loss.cpu().detach().numpy().mean(), batch_size)
         # print info
-        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.2f}|lr:{:.6f}".format(
+        msg = "Epoch:{}|Time(train):{:.2f}|Loss:{:.5f}|lr:{:.6f}".format(
             epoch,
             # train_meters["data_time"].avg,
             train_meters["training_time"].avg,

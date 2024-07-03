@@ -78,6 +78,7 @@ class TSEncoder(nn.Module):
             mask[:, -1] = False
 
         mask &= nan_mask
+        # logger.debug(np.unique(mask.cpu().detach(), return_counts=True))
         x[~mask] = 0
 
         # conv encoder

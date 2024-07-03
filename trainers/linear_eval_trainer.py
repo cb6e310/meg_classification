@@ -215,6 +215,9 @@ class LinearEvalTrainer:
                     
                 elif "resnet" in self.cfg.MODEL.ARGS.BACKBONE:
                     h = self.model(x, x, return_embedding=True, return_projection=False)
+
+                elif "TSEncoder" in self.cfg.MODEL.ARGS.BACKBONE:
+                    h = self.model(x)
             h = h.detach()
 
             feature_vector.extend(h.cpu().detach().numpy())
