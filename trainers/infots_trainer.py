@@ -37,6 +37,7 @@ class InfoTSTrainer:
         augmentation,
         cfg,
     ):
+        self.current_ckpt_path=""
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -51,7 +52,7 @@ class InfoTSTrainer:
         self.batch_size = cfg.SOLVER.BATCH_SIZE
         self.max_train_length = 3000
         self.InfoNCE = InfoNCE(cfg)
-        self.meta_epoch = 3
+        self.meta_epoch = 5
         self.CE = CrossEntropyLoss(cfg)
         meta_p = self.aug.parameters()
         self.meta_optimizer = torch.optim.AdamW(meta_p, lr=self.cfg.SOLVER.META_LR)
@@ -68,8 +69,7 @@ class InfoTSTrainer:
         )
         username = getpass.getuser()
         # init loggers
-        cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-        experiment_name = experiment_name + "_" + cur_time
+        # experiment_name = experiment_name + "_" + cur_time
         self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
         if not os.path.exists(self.log_path):
             os.makedirs(self.log_path)
@@ -77,7 +77,7 @@ class InfoTSTrainer:
 
         if not cfg.EXPERIMENT.RESUME:
             save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-            os.mkdir(os.path.join(self.log_path, "checkpoints"))
+            os.makedirs(os.path.join(self.log_path, "checkpoints"), exist_ok=True)
 
         # Choose here if you want to start training from a previous snapshot (None for new training)
         if cfg.EXPERIMENT.RESUME:
@@ -259,7 +259,7 @@ class InfoTSTrainer:
                 )
             )
             writer.write(os.linesep + "-" * 25 + os.linesep)
-        return self.best_acc
+        return self.best_acc, self.current_ckpt_path
 
     def train_epoch(self, epoch, repetition_id=0):
         lr = self.cfg.SOLVER.LR
@@ -290,8 +290,6 @@ class InfoTSTrainer:
         # validate
         if self.cfg.EXPERIMENT.TASK == "pretext":
             test_acc, test_loss = 0, 0
-        else:
-            test_acc, test_loss = validate(self.val_loader, self.model)
 
         # log
         log_dict = OrderedDict(
@@ -318,23 +316,15 @@ class InfoTSTrainer:
         }
 
         if (epoch + 1) % self.cfg.EXPERIMENT.CHECKPOINT_GAP == 0:
-            logger.info("Saving checkpoint to {}".format(self.log_path))
             chkp_path = os.path.join(
                 self.log_path,
                 "checkpoints",
                 "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
             )
+            logger.info("Saving checkpoint to {}".format(chkp_path))
             torch.save(state, chkp_path)
+            self.current_ckpt_path=chkp_path
 
-        # save best checkpoint with loss or accuracy
-        if self.cfg.EXPERIMENT.TASK != "pretext":
-            if test_acc > self.best_acc:
-                chkp_path = os.path.join(
-                    self.log_path,
-                    "checkpoints",
-                    "epoch_best_{}_chkp.tar".format(repetition_id),
-                )
-                torch.save(state, chkp_path)
 
     def train_iter(self, data, epoch, train_meters, data_itx: int = 0):
         self.optimizer.zero_grad()

@@ -39,7 +39,6 @@ class LinearEvalTrainer:
         criterion,
         train_loader,
         val_loader,
-        aug,
         cfg,
     ):
         self.cfg = cfg
@@ -55,93 +54,30 @@ class LinearEvalTrainer:
         self.best_epoch = 0
         self.resume_epoch = -1
 
-        self.aug = aug
-
-        # creating features from pretext model
         self.train_feat_loader, self.val_feat_loader = self.get_features(
             self.model, train_loader, val_loader
         )
 
-        # username = getpass.getuser()
-        # init loggers
-        cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-        experiment_name = experiment_name + "_" + cur_time
         self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
         if not os.path.exists(self.log_path):
             os.makedirs(self.log_path)
-        # self.tf_writer = SummaryWriter(os.path.join(self.log_path, "train.events"))
 
         if not cfg.EXPERIMENT.RESUME:
             save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-            os.mkdir(os.path.join(self.log_path, "checkpoints"))
-
-        # Choose here if you want to start training from a previous snapshot (None for new training)
-        if cfg.EXPERIMENT.RESUME:
-            if cfg.EXPERIMENT.CHECKPOINT != "":
-                chkp_path = os.path.join(
-                    "results", cfg.EXPERIMENT.CHECKPOINT, "checkpoints"
-                )
-                chkps = [f for f in os.listdir(chkp_path) if f[:4] == "chkp"]
-
-                # Find which snapshot to restore
-                if chkp_idx is None:
-                    chosen_chkp = "current_chkp.tar"
-                else:
-                    chosen_chkp = np.sort(chkps)[cfg.EXPERIMENT.CHKP_IDX]
-                chosen_chkp = os.path.join(
-                    "results", cfg.EXPERIMENT.CHECKPOINT, "checkpoints", chosen_chkp
-                )
-
-                print(log_msg("Loading model from {}".format(chosen_chkp), "INFO"))
-                print(
-                    log_msg("Current epoch: {}".format(cfg.EXPERIMENT.CHKP_IDX), "INFO")
-                )
-
-                self.chkp = torch.load(chosen_chkp)
-                self.model.load_state_dict(self.chkp["model_state_dict"])
-                self.optimizer.load_state_dict(self.chkp["optimizer"])
-                self.scheduler.load_state_dict(self.chkp["scheduler"])
-                self.best_acc = self.chkp["best_acc"]
-                self.best_epoch = self.chkp["epoch"]
-                self.resume_epoch = self.chkp["epoch"]
-
-                if self.chkp["dataset"] != cfg.DATASET.TYPE:
-                    print(
-                        log_msg(
-                            "ERROR: dataset in checkpoint is different from current dataset",
-                            "ERROR",
-                        )
-                    )
-                    exit()
-                if self.chkp["model"] != cfg.MODEL.TYPE:
-                    print(
-                        log_msg(
-                            "ERROR: model in checkpoint {} is different from current model {}".format,
-                            "ERROR",
-                        )
-                    )
-                    exit()
-            else:
-                chosen_chkp = None
-                print(
-                    "Resume is True but no checkpoint path is given. Start from scratch."
-                )
-        else:
-            chosen_chkp = None
-            print("Start from scratch.")
+            os.makedirs(os.path.join(self.log_path, "checkpoints"), exist_ok=True)
 
     def init_optimizer(self, cfg):
         if cfg.SOLVER.TYPE == "SGD":
             optimizer = optim.SGD(
                 self.classifier.parameters(),
-                lr=cfg.SOLVER.LR,
+                lr=cfg.EVAL_LINEAR.LR,
                 momentum=cfg.SOLVER.MOMENTUM,
                 weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             )
         elif cfg.SOLVER.TYPE == "Adam":
             optimizer = optim.Adam(
                 self.classifier.module.get_learnable_parameters(),
-                lr=cfg.SOLVER.LR,
+                lr=cfg.EVAL_LINEAR.LR,
                 weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             )
         else:
@@ -181,7 +117,7 @@ class LinearEvalTrainer:
             self.best_acc = log_dict["test_acc"]
             self.best_epoch = epoch
         # worklog.txt
-        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
+        with open(os.path.join(self.log_path, "worklog_linear.txt"), "a") as writer:
             lines = ["epoch: {}\t".format(epoch)]
             for k, v in log_dict.items():
                 lines.append("{}: {:.4f}\t".format(k, v))
@@ -260,7 +196,7 @@ class LinearEvalTrainer:
         if self.resume_epoch != -1:
             epoch = self.resume_epoch + 1
 
-        while epoch < self.cfg.SOLVER.EPOCHS:
+        while epoch < self.cfg.EVAL_LINEAR.EPOCHS:
             self.train_epoch(epoch, repetition_id=repetition_id)
             epoch += 1
         print(
@@ -271,14 +207,14 @@ class LinearEvalTrainer:
                 "EVAL",
             )
         )
-        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
+        with open(os.path.join(self.log_path, "worklog_linear.txt"), "a") as writer:
             writer.write(
                 "repetition_id:{}\tbest_acc:{:.4f}\tepoch:{}\tknn_acc:{}".format(
                     repetition_id, float(self.best_acc), self.best_epoch, knn_acc
                 )
             )
             writer.write(os.linesep + "-" * 25 + os.linesep)
-        return self.best_acc
+        return self.best_acc, knn_acc
 
     def train_epoch(self, epoch, repetition_id=0):
         lr = self.cfg.SOLVER.LR
@@ -307,10 +243,7 @@ class LinearEvalTrainer:
         pbar.close()
 
         # validate
-        if self.cfg.EXPERIMENT.TASK == "pretext":
-            test_acc, test_loss = 0, 0
-        else:
-            test_acc, test_loss = self.validate()
+        test_acc, test_loss = self.validate()
 
         # log
         log_dict = OrderedDict(
@@ -340,19 +273,10 @@ class LinearEvalTrainer:
             chkp_path = os.path.join(
                 self.log_path,
                 "checkpoints",
-                "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
+                "linear_epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
             )
             torch.save(state, chkp_path)
 
-        # save best checkpoint with loss or accuracy
-        if self.cfg.EXPERIMENT.TASK != "pretext":
-            if test_acc > self.best_acc:
-                chkp_path = os.path.join(
-                    self.log_path,
-                    "checkpoints",
-                    "epoch_best_{}_chkp.tar".format(repetition_id),
-                )
-                torch.save(state, chkp_path)
 
     def train_iter(self, data, epoch, train_meters, data_itx: int = 0):
         self.optimizer.zero_grad()

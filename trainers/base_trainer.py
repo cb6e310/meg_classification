@@ -46,6 +46,7 @@ class BaseTrainer:
         self.best_acc = -1
         self.best_epoch = 0
         self.resume_epoch = -1
+        self.current_ckpt=""
 
         username = getpass.getuser()
         # init loggers
@@ -197,7 +198,7 @@ class BaseTrainer:
                 )
             )
             writer.write(os.linesep + "-" * 25 + os.linesep)
-        return self.best_acc
+        return self.best_acc, self.current_ckpt
 
     def train_epoch(self, epoch, repetition_id=0):
         lr = self.cfg.SOLVER.LR
@@ -263,16 +264,7 @@ class BaseTrainer:
                 "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
             )
             torch.save(state, chkp_path)
-
-        # save best checkpoint with loss or accuracy
-        if self.cfg.EXPERIMENT.TASK != "pretext":
-            if test_acc > self.best_acc:
-                chkp_path = os.path.join(
-                    self.log_path,
-                    "checkpoints",
-                    "epoch_best_{}_chkp.tar".format(repetition_id),
-                )
-                torch.save(state, chkp_path)
+            self.current_ckpt=chkp_path
 
     def train_iter(self, data, epoch, train_meters, data_itx: int = 0):
         self.optimizer.zero_grad()
