@@ -32,9 +32,9 @@ class AutoAUG(Module):
             SignFlip(random=False),
         ]
 
-        self.sensitive_base_augs = [
+        self.sensitive_base_augs = Compose([
             crop(resize=cfg.DATASET.POINTS),
-        ]
+        ])
 
         self.Normalize = Compose([Normalize()])
 
@@ -106,6 +106,14 @@ class AutoAUG(Module):
         #     aug1 = aug1.transpose(1, 2)
         #     aug2 = aug2.transpose(1, 2)
         #     return aug1, aug2
+        if step == "equimod_clr":
+            aug1, _= self.random_jitter(x)
+            aug2, _= self.random_jitter(x)
+            aug1= self.sensitive_base_augs(aug1)
+            aug2= self.sensitive_base_augs(aug2)
+            aug1 = aug1.transpose(1, 2)
+            aug2 = aug2.transpose(1, 2)
+            return aug1, aug2
 
         if step == "clr":
             base_aug = Compose(self.normal_augs_wo_spec)
@@ -127,9 +135,13 @@ class AutoAUG(Module):
             return aug1, aug2
 
         elif step == "rec":
-            aug1, _ = self.random_jitter(x, )
+            aug1, _ = self.random_jitter(
+                x,
+            )
             # aug1=x
-            aug2, _ = self.random_jitter(x, )
+            aug2, _ = self.random_jitter(
+                x,
+            )
             # aug1 = self.Normalize(aug1)
             # aug2 = self.Normalize(aug2)
             aug1 = aug1.transpose(1, 2)
@@ -145,6 +157,12 @@ class AutoAUG(Module):
             spec_x = spec_x.transpose(1, 2)
             return spec_x, labels
 
+        elif step == "equimod_pred":
+            spec_x, labels = self.random_jitter(x)
+            spec_x = self.sensitive_base_augs(spec_x)
+            # spec_x = self.Normalize(spec_x)
+            spec_x = spec_x.transpose(1, 2)
+            return spec_x, labels
         else:
             # linear eval
             # x = self.Normalize(x)

@@ -13,6 +13,7 @@ model_dict = {
     "TSEncoder": (TSEncoder, ""),
     "CurrentCLR": (CurrentCLR, ""),
     "CurrentSimCLR": (CurrentSimCLR, ""),
+    "Equimod": (Equimod, ""),
 }
 
 criterion_dict = {

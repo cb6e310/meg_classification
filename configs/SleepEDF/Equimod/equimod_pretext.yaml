@@ -1,0 +1,49 @@
+EXPERIMENT:
+  NAME: "equimod_pretext"
+  TAG: "proposed"
+  PROJECT: "baseline project"
+  DEBUG: False 
+  LOG_IMAGES: False
+  REPETITION_NUM: 1 # Number of repetition times
+  TASK: "pretext"
+  RESUME : False # Resume training
+  CHECKPOINT : "proposed project/current_pretext_2024-05-25_11-14-32" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : 9  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  CHECKPOINT_GAP: 10
+  SEED: 42
+DATASET:
+  ROOT: "/home/song/datasets/EEG"
+  TYPE: "sleepedf20"
+  CHANNELS: 1
+  POINTS: 3000
+  NUM_CLASSES: 5
+  TEST:
+    BATCH_SIZE: 128
+MODEL:
+  TYPE: "Equimod"
+  ARGS:
+    BACKBONE: "eegconvnet"
+    SIAMESE: True
+    N_FEATURES: 256 # backbone output feature dimension
+    HIDDEN_LAYER: -1
+    PROJECTION_DIM: 256
+    PROJECTION_HIDDEN_SIZE: 2048
+    TAU_BASE: 0.996
+    WARMUP_EPOCHS: -1
+    PRED_WEIGHT: 1
+    # SOURCE_CHANNELS: 36
+  CRITERION:
+    TYPE: "NT_Xent"
+    ARGS:
+      TEMPERATURE: 0.5
+      # SOURCE_CHANNELS: 36
+SOLVER:
+  TRAINER: "equimod"
+  BATCH_SIZE: 500
+  EPOCHS: 10
+  LR: 0.001
+  SCHEDULER:
+    TYPE: "ExponentialLR"
+    GAMMA: 0.9
+    MIN_LR: 0.0001
+

@@ -5,6 +5,7 @@ from trainers.ts2vec_trainer import TS2VecTrainer
 from trainers.tsencoder_trainer import TSEncoderTrainer
 from trainers.current_trainer import CurrentTrainer
 from trainers.current_simclr_trainer import CurrentSimCLRTrainer
+from trainers.equimod_trainer import EquimodTrainer
 
 trainer_dict = {
     "base": BaseTrainer,
@@ -13,5 +14,6 @@ trainer_dict = {
     "TS2Vec": TS2VecTrainer,
     "TSEncoder": TSEncoderTrainer,
     "current": CurrentTrainer,
-    "currentsimclr": CurrentSimCLRTrainer
+    "currentsimclr": CurrentSimCLRTrainer,
+    "equimod": EquimodTrainer
 }

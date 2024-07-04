@@ -1067,3 +1067,77 @@ class CurrentSimCLR(BaseNet):
             # linear evaluation
             if return_embedding:
                 return self.backbone(clr_batch_view_1)
+
+class Equimod(BaseNet):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        input_channels = cfg.DATASET.CHANNELS
+        num_classes = cfg.DATASET.NUM_CLASSES
+
+        backbone_name = cfg.MODEL.ARGS.BACKBONE
+        projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+        n_features = cfg.MODEL.ARGS.N_FEATURES
+
+        self.backbone = backbone_dict[backbone_name][0](cfg)
+        self.projection_head_inv = nn.Sequential(
+            nn.Linear(n_features, projection_dim),
+        )
+        self.predictor_eqv= nn.Sequential(
+            nn.Linear(n_features+1, projection_dim),
+        )
+        self.projection_head_eqv = nn.Sequential(
+            nn.Linear(n_features, projection_dim)
+        )
+
+        # self.criterion = contrastive_loss(cfg)
+
+        # self.fc = nn.Linear(projection_dim, num_classes)
+
+    def forward(
+        self,
+        step=None,
+        clr_batch_view_1=None,
+        clr_batch_view_2=None,
+        pred_batch_view_spec=None,
+        pred_batch_view_normal=None,
+        pred_params=None,
+        return_embedding=False,
+        return_projection=True,
+    ):
+        if step == "clr":
+            if "resnet" in self.cfg.MODEL.ARGS.BACKBONE:
+                h_i = self.backbone(clr_batch_view_1)
+                h_j = self.backbone(clr_batch_view_2)
+            else:
+
+                h_i, _, _ = self.backbone(clr_batch_view_1)
+                h_j, _, _ = self.backbone(clr_batch_view_2)
+                h_i = h_i[1]
+                h_j = h_j[1]
+            z_i = F.normalize(self.projection_head_inv(h_i), dim=-1)
+            z_j = F.normalize(self.projection_head_inv(h_j), dim=-1)
+            # logger.debug(z_i.shape)
+
+            # loss = self.compute_loss(z_i, z_j)
+            if return_embedding:
+                return h_i
+            return h_i, h_j, z_i, z_j
+
+        elif step == "pred":
+            representation_spec, _, _ = self.backbone(
+                pred_batch_view_spec,
+            )
+            representation_normal, _, _ = self.backbone(
+                pred_batch_view_normal
+            )
+            z_spec = self.projection_head_eqv(representation_spec[1])
+            z_normal = self.projection_head_eqv(representation_normal[1])
+            z_normal_eqv = self.predictor_eqv(torch.cat((z_normal, pred_params), dim=1))
+            
+
+            return z_spec, z_normal_eqv
+
+        else:
+            # linear evaluation
+            if return_embedding:
+                return self.backbone(clr_batch_view_1)
