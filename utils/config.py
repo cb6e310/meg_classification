@@ -47,7 +47,7 @@ CFG.EXPERIMENT.SEED = (
 )
 CFG.EXPERIMENT.TASK = "train"  # train, test, pretext
 CFG.EXPERIMENT.DEBUG = False  # Debug mode
-CFG.EXPERIMENT.GPU_IDS = "1"  # List of GPUs used
+CFG.EXPERIMENT.GPU_IDS = "0"  # List of GPUs used
 CFG.EXPERIMENT.WORLD_SIZE = 2  # Number of GPUs used
 CFG.EXPERIMENT.REPETITION_NUM = 5  # Number of repetition times
 CFG.EXPERIMENT.RESUME = False  # Resume training
@@ -78,7 +78,7 @@ CFG.MODEL.ARGS.SIAMESE = False
 CFG.MODEL.CRITERION = CN(new_allowed=True)
 
 # Solver
-CFG.SOLVER = CN()
+CFG.SOLVER = CN(new_allowed=True)
 CFG.SOLVER.TRAINER = "base"
 CFG.SOLVER.BATCH_SIZE = 1024  # Grid search
 CFG.SOLVER.EPOCHS = 100

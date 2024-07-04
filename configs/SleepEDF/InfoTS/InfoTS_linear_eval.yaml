@@ -1,5 +1,5 @@
 EXPERIMENT:
-  NAME: "simclr_linear_eval"
+  NAME: "InfoTS_linear_eval"
   TAG: "baselines"
   PROJECT: "baseline project"
   DEBUG: False
@@ -11,7 +11,7 @@ EXPERIMENT:
   KNN: True
 DATASET:
   ROOT: "/home/song/datasets/EEG"
-  TYPE: "sleepedf20"
+  TYPE: "sleepedf20v2"
   CHANNELS: 1
   POINTS: 3000
   NUM_CLASSES: 5

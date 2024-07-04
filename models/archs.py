@@ -1083,7 +1083,7 @@ class Equimod(BaseNet):
             nn.Linear(n_features, projection_dim),
         )
         self.predictor_eqv= nn.Sequential(
-            nn.Linear(n_features+1, projection_dim),
+            nn.Linear(projection_dim+1, projection_dim),
         )
         self.projection_head_eqv = nn.Sequential(
             nn.Linear(n_features, projection_dim)
@@ -1140,4 +1140,4 @@ class Equimod(BaseNet):
         else:
             # linear evaluation
             if return_embedding:
-                return self.backbone(clr_batch_view_1)
+                return self.backbone(clr_batch_view_1)[0][1]

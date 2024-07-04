@@ -16,7 +16,7 @@ from utils.helpers import (
     setup_benchmark,
 )
 from utils.dataset import get_data_loader_from_dataset
-from utils.augmentations import AutoAUG
+from utils.augmentations import AutoAUG, InfoTSAUG
 
 from trainers import trainer_dict
 from models import model_dict, criterion_dict
@@ -78,7 +78,10 @@ if __name__ == "__main__":
         )
         val_loader = None
 
-        aug = AutoAUG(cfg).cuda()
+        if cfg.SOLVER.TRAINER == "InfoTS":
+            aug = InfoTSAUG(cfg).cuda()
+        else:
+            aug = AutoAUG(cfg).cuda()
 
         model = model_dict[cfg.MODEL.TYPE][0](cfg).cuda()
         logger.info("model's device: {}".format(next(model.parameters()).device))
@@ -112,6 +115,11 @@ if __name__ == "__main__":
             )
         )
         writer.write(os.linesep + "-" * 25 + os.linesep)
+
+    if cfg.EXPERIMENT.EVAL_NEXT==True:
+        pass
+        if cfg.EXPERIMENT.EVAL_LINEAR==True:
+            
     ###############
     # Prepare DataLoader
     ###############

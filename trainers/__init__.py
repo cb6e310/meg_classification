@@ -6,6 +6,7 @@ from trainers.tsencoder_trainer import TSEncoderTrainer
 from trainers.current_trainer import CurrentTrainer
 from trainers.current_simclr_trainer import CurrentSimCLRTrainer
 from trainers.equimod_trainer import EquimodTrainer
+from trainers.infots_trainer import InfoTSTrainer
 
 trainer_dict = {
     "base": BaseTrainer,
@@ -15,5 +16,6 @@ trainer_dict = {
     "TSEncoder": TSEncoderTrainer,
     "current": CurrentTrainer,
     "currentsimclr": CurrentSimCLRTrainer,
-    "equimod": EquimodTrainer
+    "equimod": EquimodTrainer,
+    "InfoTS": InfoTSTrainer
 }
