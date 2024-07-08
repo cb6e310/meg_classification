@@ -11,7 +11,7 @@ EXPERIMENT:
   CHECKPOINT_GAP: 10
   SEED: 42
   KNN: True
-  EVAL_ONLY: True
+  EVAL_ONLY: False
   EVAL_NEXT: True
   EVAL_LINEAR: True
   PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/TS2Vec_Pretrain_2024-07-08_06-56-46"
@@ -41,7 +41,7 @@ MODEL:
 SOLVER:
   TRAINER: "TS2Vec"
   BATCH_SIZE: 256
-  EPOCHS: 10
+  EPOCHS: 20
   META_LR: 0.01
   LR: 0.05
   SCHEDULER:

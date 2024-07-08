@@ -273,7 +273,7 @@ class LinearEvalTrainer:
             chkp_path = os.path.join(
                 self.log_path,
                 "checkpoints",
-                "linear_epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
+                "linear_eval_epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
             )
             torch.save(state, chkp_path)
 

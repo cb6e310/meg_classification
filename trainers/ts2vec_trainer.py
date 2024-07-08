@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data.dataloader import DataLoader
+from torch.utils.data import TensorDataset
 from torchvision.utils import make_grid
 from torch.utils.tensorboard import SummaryWriter
 from io import BytesIO
@@ -49,6 +50,7 @@ class Ts2vecTrainer:
         self.clr_criterion = criterion
         # self.pred_criterion = torch.nn.BCEWithLogitsLoss().cuda()
         self.temporal_unit = 0.5
+        self.max_train_length=300
         self.model = model
         self.aug = aug
 
@@ -61,6 +63,7 @@ class Ts2vecTrainer:
         self.resume_epoch = -1
 
         self.current_epoch = 0
+        self.batch_size = cfg.SOLVER.BATCH_SIZE
 
         username = getpass.getuser()
         # init loggers
@@ -199,6 +202,20 @@ class Ts2vecTrainer:
             writer.writelines(lines)
 
     def train(self, repetition_id=0):
+        train_data = self.train_loader.dataset.x_data.transpose(1,2).squeeze().cpu().numpy()
+        if self.max_train_length is not None:
+            sections = train_data.shape[1] // self.max_train_length
+            if sections >= 2:
+                train_data = np.concatenate(self.split_with_nan(train_data, sections, axis=1), axis=0)
+
+        temporal_missing = np.isnan(train_data).all(axis=-1).any(axis=0)
+        if temporal_missing[0] or temporal_missing[-1]:
+            train_data = self.centerize_vary_length_series(train_data)
+                
+        train_data = train_data[~np.isnan(train_data).all(axis=2).all(axis=1)]
+        
+        train_dataset = TensorDataset(torch.from_numpy(train_data).to(torch.float))
+        self.train_loader = DataLoader(train_dataset, batch_size=min(self.batch_size, len(train_dataset)), shuffle=True, drop_last=True)
         self.current_epoch = 0
 
         if self.resume_epoch != -1:
@@ -305,7 +322,7 @@ class Ts2vecTrainer:
 
     def after_warmup_iter(self, data, epoch, train_meters, data_itx: int = 0):
         train_start_time = time.time()
-        x, _, _ = data
+        x = data[0]
         batch_size = x.size(0)
         loss_clr = torch.tensor(0, dtype=torch.float32).cuda()
         loss_pred = torch.tensor(0, dtype=torch.float32).cuda()
@@ -333,6 +350,9 @@ class Ts2vecTrainer:
         self.optimizer.zero_grad()
         x = x.float().cuda()
         x = x.transpose(1, 2)
+        if self.max_train_length is not None and x.size(1) > self.max_train_length:
+            window_offset = np.random.randint(x.size(1) - self.max_train_length + 1)
+            x = x[:, window_offset : window_offset + self.max_train_length]
         ts_l = x.size(1)
         crop_l = np.random.randint(low=2 ** (self.temporal_unit + 1), high=ts_l + 1)
         crop_left = np.random.randint(ts_l - crop_l + 1)
@@ -383,3 +403,20 @@ class Ts2vecTrainer:
     def take_per_row(A, indx, num_elem):
         all_indx = indx[:, None] + np.arange(num_elem)
         return A[torch.arange(all_indx.shape[0])[:, None], all_indx]
+    @staticmethod
+    def split_with_nan(x, sections, axis=0):
+        assert x.dtype in [np.float16, np.float32, np.float64]
+        arrs = np.array_split(x, sections, axis=axis)
+        target_length = arrs[0].shape[axis]
+        for i in range(len(arrs)):
+            arrs[i] = pad_nan_to_target(arrs[i], target_length, axis=axis)
+        return arrs
+    @staticmethod
+    def centerize_vary_length_series(x):
+        prefix_zeros = np.argmax(~np.isnan(x).all(axis=-1), axis=1)
+        suffix_zeros = np.argmax(~np.isnan(x[:, ::-1]).all(axis=-1), axis=1)
+        offset = (prefix_zeros + suffix_zeros) // 2 - prefix_zeros
+        rows, column_indices = np.ogrid[:x.shape[0], :x.shape[1]]
+        offset[offset < 0] += x.shape[1]
+        column_indices = column_indices - offset[:, np.newaxis]
+        return x[rows, column_indices]

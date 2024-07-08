@@ -456,7 +456,10 @@ class VARCNNBackbone(BaseNet):
 
         # refact nn.Sequential
         self.transpose0 = Transpose(1, 2)
-        self.Spatial = nn.Linear(meg_channels, sources_channels)
+        if cfg.MODEL.TYPE=='ts2vec':
+            self.Spatial = nn.Linear(points_length, sources_channels)
+        else:
+            self.Spatial = nn.Linear(meg_channels, sources_channels)
         self.transpose1 = Transpose(1, 2)
         self.Temporal_VAR = Conv(
             in_channels=sources_channels,
@@ -771,6 +774,7 @@ class CurrentCLR(BaseNet):
         hidden_layer = cfg.MODEL.ARGS.HIDDEN_LAYER
         projection_size = cfg.MODEL.ARGS.PROJECTION_DIM
         projection_hidden_size = cfg.MODEL.ARGS.PROJECTION_HIDDEN_SIZE
+        n_feature = cfg.MODEL.ARGS.N_FEATURES
         moving_average_decay = cfg.MODEL.ARGS.TAU_BASE
         use_momentum = cfg.MODEL.ARGS.USE_MOMENTUM
         sync_batchnorm = None
@@ -818,7 +822,7 @@ class CurrentCLR(BaseNet):
         # regressive head
         self.pred_fc = nn.Sequential(
             nn.Linear(projection_size if "varcnn" not in 
-                    self.cfg.MODEL.ARGS.BACKBONE else  23040, 128),
+                    self.cfg.MODEL.ARGS.BACKBONE else n_feature , 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.Linear(128, 64),
