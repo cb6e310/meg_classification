@@ -42,6 +42,7 @@ class EquimodTrainer:
     def __init__(
         self, experiment_name, model, criterion, train_loader, val_loader, aug, cfg
     ):
+        self.current_ckpt_path=""
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -69,8 +70,8 @@ class EquimodTrainer:
         if not cfg.EXPERIMENT.DEBUG:
 
             if not cfg.EXPERIMENT.RESUME:
-                cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-                experiment_name = experiment_name + "_" + cur_time
+                # cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+                # experiment_name = experiment_name + "_" + cur_time
                 self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
                 if not os.path.exists(self.log_path):
                     os.makedirs(self.log_path)
@@ -225,7 +226,7 @@ class EquimodTrainer:
                 )
             )
             writer.write(os.linesep + "-" * 25 + os.linesep)
-        return self.best_acc
+        return self.best_acc, self.current_ckpt_path
 
     def train_epoch(self, epoch, repetition_id=0):
         lr = self.cfg.SOLVER.LR
@@ -303,6 +304,7 @@ class EquimodTrainer:
                     "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
                 )
                 torch.save(state, chkp_path)
+                self.current_ckpt_path=chkp_path
 
         # save best checkpoint with loss or accuracy
         if self.cfg.EXPERIMENT.TASK != "pretext":

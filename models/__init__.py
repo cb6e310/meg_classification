@@ -14,6 +14,7 @@ model_dict = {
     "CurrentCLR": (CurrentCLR, ""),
     "CurrentSimCLR": (CurrentSimCLR, ""),
     "Equimod": (Equimod, ""),
+    "ts2vec": (Ts2vec,"")
 }
 
 criterion_dict = {

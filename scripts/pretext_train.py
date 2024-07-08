@@ -109,7 +109,7 @@ def train(cfg):
             )
         )
         writer.write(os.linesep + "-" * 25 + os.linesep)
-    return ckpts
+    return ckpts, trainer.log_path
 
 def linear_eval(cfg, ckpts=None, log_path=None):
     train_loader = get_data_loader_from_dataset(
@@ -149,9 +149,10 @@ def linear_eval(cfg, ckpts=None, log_path=None):
                     number = int(parts[1])
                     if number > max_epoch:
                         max_epoch = number
-                        ckpts = [os.path.join(log_path,"checkpoints",filename)]
-                    elif number == max_epoch:
-                        ckpts.append(os.path.join(log_path,"checkpoints", filename))
+        for filename in os.listdir()
+        ckpts = [os.path.join(log_path,"checkpoints",filename)]
+        elif number == max_epoch:
+            ckpts.append(os.path.join(log_path,"checkpoints", filename))
     for ckpt in ckpts:
         pretrained_dict = torch.load(ckpt)
 

@@ -1,5 +1,5 @@
 EXPERIMENT:
-  NAME: "InfoTS_Pretrain"
+  NAME: "TS2Vec_Pretrain"
   TAG: "baselines"
   PROJECT: "baseline project"
   DEBUG: False
@@ -11,10 +11,10 @@ EXPERIMENT:
   CHECKPOINT_GAP: 10
   SEED: 42
   KNN: True
-  EVAL_ONLY: True
+  EVAL_ONLY: False
   EVAL_NEXT: True
   EVAL_LINEAR: True
-  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/InfoTS_Pretrain_2024-07-04_11-20-21"
+  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/InfoTS_Pretrain_2024-07-04_10-28-50"
 DATASET:
   ROOT: "/home/song/datasets/EEG"
   TYPE: "sleepedf20"
@@ -24,7 +24,7 @@ DATASET:
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "SimCLR"
+  TYPE: "ts2vec"
   ARGS:
     BACKBONE: "eegconvnet"
     TEMPERATURE: 0.5
@@ -39,7 +39,7 @@ MODEL:
       TEMPERATURE: 0.5
       # SOURCE_CHANNELS: 36
 SOLVER:
-  TRAINER: "InfoTS"
+  TRAINER: "TS2Vec"
   BATCH_SIZE: 256
   EPOCHS: 10
   META_LR: 0.01

@@ -547,6 +547,53 @@ class EEGConvNetBackbone(nn.Module):
 
         return (x, out), (out_inv, out_inv_g), (out_acs, out_acs_g)
 
+class Ts2vec(BaseNet):
+    def __init__(self, cfg):
+        super(Ts2vec, self).__init__(cfg)
+        input_channels = cfg.DATASET.CHANNELS
+        num_classes = cfg.DATASET.NUM_CLASSES
+
+        backbone_name = cfg.MODEL.ARGS.BACKBONE
+        projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+        n_features = cfg.MODEL.ARGS.N_FEATURES
+        projection_hidden_dim = cfg.MODEL.ARGS.PROJECTION_HIDDEN_SIZE
+
+        if "resnet" in backbone_name:
+            self.backbone = backbone_dict[backbone_name][0](pretrained=False)
+            self.backbone.conv1 = nn.Conv2d(
+                input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+            )
+            self.projection_head = nn.Sequential(
+                nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features),
+                nn.ReLU(),
+                nn.Linear(self.backbone.fc.in_features, projection_dim),
+            )
+            self.backbone.fc = nn.Identity()
+        elif "varcnn"  in backbone_name:
+            self.backbone = backbone_dict[backbone_name][0](cfg)
+            self.projection_head = nn.Sequential(
+                nn.Linear(n_features, projection_dim),
+            )
+        elif "eegconvnet" in backbone_name:
+            self.backbone = backbone_dict[backbone_name][0](cfg)
+            self.projection_head = nn.Sequential(
+                nn.Linear(n_features, projection_hidden_dim),
+                nn.ReLU(),
+                nn.Linear(projection_hidden_dim, projection_dim),
+            )
+        print(self.backbone)
+
+        # self.criterion = contrastive_loss(cfg)
+
+        # self.fc = nn.Linear(projection_dim, num_classes)
+
+    def forward(self, x_i, x_j, return_embedding=False, return_projection=True):
+        if "resnet" in self.cfg.MODEL.ARGS.BACKBONE:
+            x_i = torch.unsqueeze(x_i, -1)
+            x_j = torch.unsqueeze(x_j, -1)
+        h_i = self.backbone(x_i)[0][1].unsqueeze(1)
+        h_j = self.backbone(x_j)[0][1].unsqueeze(1)
+        return h_i, h_j
 
 class SimCLR(BaseNet):
     def __init__(self, cfg):

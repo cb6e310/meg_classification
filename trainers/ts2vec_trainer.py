@@ -1,23 +1,26 @@
 import os
 import time
 from tqdm import tqdm
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-
-
-import numpy as np
-
 from collections import OrderedDict
+
+import torch
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data.dataloader import DataLoader
+from torchvision.utils import make_grid
+from torch.utils.tensorboard import SummaryWriter
+from io import BytesIO
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+
 import getpass
+
 from utils.helpers import (
     AverageMeter,
     accuracy,
     adjust_learning_rate,
     log_msg,
-    timing_start,
-    timing_end,
 )
 
 from utils.config import (
@@ -25,164 +28,117 @@ from utils.config import (
     log_msg,
     save_cfg,
 )
+
 from models.losses import (
-    hierarchical_contrastive_loss,
+    OrthLoss,
 )
 
 from loguru import logger
-
+from models.losses import hierarchical_contrastive_loss
 from utils.validate import validate
 
 
-def torch_pad_nan(arr, left=0, right=0, dim=0):
-    if left > 0:
-        padshape = list(arr.shape)
-        padshape[dim] = left
-        arr = torch.cat((torch.full(padshape, np.nan), arr), dim=dim)
-    if right > 0:
-        padshape = list(arr.shape)
-        padshape[dim] = right
-        arr = torch.cat((arr, torch.full(padshape, np.nan)), dim=dim)
-    return arr
-
-
-def pad_nan_to_target(array, target_length, axis=0, both_side=False):
-    assert array.dtype in [np.float16, np.float32, np.float64]
-    pad_size = target_length - array.shape[axis]
-    if pad_size <= 0:
-        return array
-    npad = [(0, 0)] * array.ndim
-    if both_side:
-        npad[axis] = (pad_size // 2, pad_size - pad_size // 2)
-    else:
-        npad[axis] = (0, pad_size)
-    return np.pad(array, pad_width=npad, mode="constant", constant_values=np.nan)
-
-
-def split_with_nan(x, sections, axis=0):
-    assert x.dtype in [np.float16, np.float32, np.float64]
-    arrs = np.array_split(x, sections, axis=axis)
-    target_length = arrs[0].shape[axis]
-    for i in range(len(arrs)):
-        arrs[i] = pad_nan_to_target(arrs[i], target_length, axis=axis)
-    return arrs
-
-
-def take_per_row(A, indx, num_elem):
-    all_indx = indx[:, None] + np.arange(num_elem)
-    return A[torch.arange(all_indx.shape[0])[:, None], all_indx]
-
-
-def centerize_vary_length_series(x):
-    prefix_zeros = np.argmax(~np.isnan(x).all(axis=-1), axis=1)
-    suffix_zeros = np.argmax(~np.isnan(x[:, ::-1]).all(axis=-1), axis=1)
-    offset = (prefix_zeros + suffix_zeros) // 2 - prefix_zeros
-    rows, column_indices = np.ogrid[: x.shape[0], : x.shape[1]]
-    offset[offset < 0] += x.shape[1]
-    column_indices = column_indices - offset[:, np.newaxis]
-    return x[rows, column_indices]
-
-
-def data_dropout(arr, p):
-    B, T = arr.shape[0], arr.shape[1]
-    mask = np.full(B * T, False, dtype=np.bool)
-    ele_sel = np.random.choice(B * T, size=int(B * T * p), replace=False)
-    mask[ele_sel] = True
-    res = arr.copy()
-    res[mask.reshape(B, T)] = np.nan
-    return res
-
-
-class TS2VecTrainer:
-    def __init__(self, experiment_name, model, criterion, train_loader, val_loader, cfg):
+class Ts2vecTrainer:
+    def __init__(
+        self, experiment_name, model, criterion, train_loader, val_loader, aug, cfg
+    ):
+        self.current_ckpt_path = ""
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.criterion = criterion
+        self.clr_criterion = hierarchical_contrastive_loss
+        self.pred_criterion = criterion
+        # self.pred_criterion = torch.nn.BCEWithLogitsLoss().cuda()
+        self.temporal_unit = 0.5
         self.model = model
+        self.aug = aug
+
+        # check model name is BYOL
+
         self.optimizer = self.init_optimizer(cfg)
+        self.scheduler = self.init_scheduler(cfg)
         self.best_acc = -1
         self.best_epoch = 0
         self.resume_epoch = -1
 
+        self.current_epoch = 0
+
         username = getpass.getuser()
         # init loggers
-        cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-        experiment_name = experiment_name + "_" + cur_time
-        self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
-        if not os.path.exists(self.log_path):
-            os.makedirs(self.log_path)
-        # self.tf_writer = SummaryWriter(os.path.join(self.log_path, "train.events"))
+        if not cfg.EXPERIMENT.DEBUG:
 
-        if not cfg.EXPERIMENT.RESUME:
-            save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-            os.mkdir(os.path.join(self.log_path, "checkpoints"))
-
-        # Choose here if you want to start training from a previous snapshot (None for new training)
-        if cfg.EXPERIMENT.RESUME:
-            if cfg.EXPERIMENT.CHECKPOINT != "":
-                chkp_path = os.path.join(
-                    "results", cfg.EXPERIMENT.CHECKPOINT, "checkpoints"
-                )
-                chkps = [f for f in os.listdir(chkp_path) if f[:4] == "chkp"]
-
-                # Find which snapshot to restore
-                if chkp_idx is None:
-                    chosen_chkp = "current_chkp.tar"
-                else:
-                    chosen_chkp = np.sort(chkps)[cfg.EXPERIMENT.CHKP_IDX]
-                chosen_chkp = os.path.join(
-                    "results", cfg.EXPERIMENT.CHECKPOINT, "checkpoints", chosen_chkp
-                )
-
-                print(log_msg("Loading model from {}".format(chosen_chkp), "INFO"))
-                print(
-                    log_msg("Current epoch: {}".format(cfg.EXPERIMENT.CHKP_IDX), "INFO")
-                )
-
-                self.chkp = torch.load(chosen_chkp)
-                self.model.load_state_dict(self.chkp["model_state_dict"])
-                self.optimizer.load_state_dict(self.chkp["optimizer"])
-                self.best_acc = self.chkp["best_acc"]
-                self.best_epoch = self.chkp["epoch"]
-                self.resume_epoch = self.chkp["epoch"]
-
-                if self.chkp["dataset"] != cfg.DATASET.TYPE:
-                    print(
-                        log_msg(
-                            "ERROR: dataset in checkpoint is different from current dataset",
-                            "ERROR",
-                        )
-                    )
-                    exit()
-                if self.chkp["model"] != cfg.MODEL.TYPE:
-                    print(
-                        log_msg(
-                            "ERROR: model in checkpoint {} is different from current model {}".format,
-                            "ERROR",
-                        )
-                    )
-                    exit()
-            else:
+            if not cfg.EXPERIMENT.RESUME:
+                # cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+                # experiment_name = experiment_name + "_" + cur_time
+                self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
+                if not os.path.exists(self.log_path):
+                    os.makedirs(self.log_path)
+                save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
+                os.mkdir(os.path.join(self.log_path, "checkpoints"))
                 chosen_chkp = None
-                print(
-                    "Resume is True but no checkpoint path is given. Start from scratch."
-                )
-        else:
-            chosen_chkp = None
-            print("Start from scratch.")
+                logger.info("Start from scratch.")
 
-        self.device = "cuda"
-        self.lr = cfg.SOLVER.LR
-        self.batch_size = cfg.SOLVER.BATCH_SIZE
-        self.max_train_length = cfg.MODEL.ARGS.MAX_TRAIN_LENGTH
-        self.temporal_unit = cfg.MODEL.ARGS.TEMPORAL_UNIT
+            # Choose here if you want to start training from a previous snapshot (None for new training)
+            else:
+                self.log_path = os.path.join(cfg.LOG.PREFIX, cfg.EXPERIMENT.CHECKPOINT)
+                if cfg.EXPERIMENT.CHECKPOINT != "":
+                    chkp_path = os.path.join(
+                        cfg.LOG.PREFIX, cfg.EXPERIMENT.CHECKPOINT, "checkpoints"
+                    )
+                    chkps = [f for f in os.listdir(chkp_path) if f[:4] == "chkp"]
 
-        self.net = torch.optim.swa_utils.AveragedModel(self.model)
-        self.net.update_parameters(self.model)
+                    # Find which snapshot to restore
+                    if cfg.EXPERIMENT.CHKP_IDX is None:
+                        chosen_chkp = "current_chkp.tar"
+                    else:
+                        chosen_chkp = "epoch_{}_0_chkp.tar".format(
+                            cfg.EXPERIMENT.CHKP_IDX
+                        )
+                    chosen_chkp = os.path.join(
+                        cfg.LOG.PREFIX,
+                        cfg.EXPERIMENT.CHECKPOINT,
+                        "checkpoints",
+                        chosen_chkp,
+                    )
 
-        self.n_epochs = 0
-        self.n_iters = 0
+                    print(log_msg("Loading model from {}".format(chosen_chkp), "INFO"))
+                    print(
+                        log_msg(
+                            "Current epoch: {}".format(cfg.EXPERIMENT.CHKP_IDX), "INFO"
+                        )
+                    )
+
+                    self.chkp = torch.load(chosen_chkp)
+                    self.model.load_state_dict(self.chkp["model_state_dict"])
+                    self.optimizer.load_state_dict(self.chkp["optimizer"])
+                    self.scheduler.load_state_dict(self.chkp["scheduler"])
+                    # self.best_acc = self.chkp["best_acc"]
+                    self.best_epoch = self.chkp["epoch"]
+                    self.resume_epoch = self.chkp["epoch"]
+
+                    if self.chkp["dataset"] != cfg.DATASET.TYPE:
+                        print(
+                            log_msg(
+                                "ERROR: dataset in checkpoint is different from current dataset",
+                                "ERROR",
+                            )
+                        )
+                        exit()
+                    if self.chkp["model"] != cfg.MODEL.TYPE:
+                        print(
+                            log_msg(
+                                "ERROR: model in checkpoint {} is different from current model {}".format,
+                                "ERROR",
+                            )
+                        )
+                        exit()
+                else:
+                    chosen_chkp = None
+                    print(
+                        "Resume is True but no checkpoint path is given. Start from scratch."
+                    )
+            self.writer = SummaryWriter(os.path.join(self.log_path, "writer"))
+            logger.info("Log path: {}".format(self.log_path))
 
     def init_optimizer(self, cfg):
         if cfg.SOLVER.TYPE == "SGD":
@@ -202,268 +158,224 @@ class TS2VecTrainer:
             raise NotImplementedError(cfg.SOLVER.TYPE)
         return optimizer
 
-    def train(self, n_iters=None):
-        """Training the TS2Vec model.
+    def init_scheduler(self, cfg):
+        # check optimizer
+        assert self.optimizer is not None
 
-        Args:
-            train_data (numpy.ndarray): The training data. It should have a shape of (n_instance, n_timestamps, n_features). All missing data should be set to NaN.
-            n_epochs (Union[int, NoneType]): The number of epochs. When this reaches, the training stops.
-            n_iters (Union[int, NoneType]): The number of iterations. When this reaches, the training stops. If both n_epochs and n_iters are not specified, a default setting would be used that sets n_iters to 200 for a dataset with size <= 100000, 600 otherwise.
-            verbose (bool): Whether to print the training loss after each epoch.
+        if cfg.SOLVER.SCHEDULER.TYPE == "step":
+            scheduler = optim.lr_scheduler.StepLR(
+                self.optimizer,
+                step_size=cfg.SOLVER.SCHEDULER.STEP_SIZE,
+                gamma=cfg.SOLVER.SCHEDULER.GAMMA,
+            )
+        elif cfg.SOLVER.SCHEDULER.TYPE == "cosine":
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, T_max=cfg.SOLVER.EPOCHS
+            )
+        elif cfg.SOLVER.SCHEDULER.TYPE == "ExponentialLR":
+            scheduler = optim.lr_scheduler.ExponentialLR(
+                self.optimizer, gamma=cfg.SOLVER.SCHEDULER.GAMMA
+            )
+        else:
+            raise NotImplementedError(cfg.SOLVER.SCHEDULER.TYPE)
+        return scheduler
 
-        Returns:
-            loss_log: a list containing the training losses on each epoch.
-        """
+    def log(self, epoch, it, log_dict):
+        # import wandb
 
-        loss_log = []
-        n_epochs = self.cfg.SOLVER.EPOCHS
+        # # wandb.log({"current lr": lr})
+        # wandb.log(log_dict)
+        # resolve log_dict
+        log_dict = {k: v.avg for k, v in log_dict.items()}
+        self.writer.add_scalars(
+            "losses", log_dict, global_step=epoch * len(self.train_loader) + it
+        )
 
-        
-        while True:
-            if n_epochs is not None and self.n_epochs >= n_epochs:
-                break
+    def log_worklog(self, epoch, log_dict):
+        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
+            lines = ["epoch: {}\t".format(epoch)]
+            for k, v in log_dict.items():
+                lines.append("{}: {:.4f}\t".format(k, v))
+            lines.append(os.linesep)
+            writer.writelines(lines)
 
-            cum_loss = 0
-            n_epoch_iters = 0
+    def train(self, repetition_id=0):
+        self.current_epoch = 0
 
-            interrupted = False
-            for batch in self.train_loader:
-                if n_iters is not None and self.n_iters >= n_iters:
-                    interrupted = True
-                    break
+        if self.resume_epoch != -1:
+            self.current_epoch = self.resume_epoch + 1
 
-                x = batch[0]
-                if (
-                    self.max_train_length is not None
-                    and x.size(1) > self.max_train_length
-                ):
-                    window_offset = np.random.randint(
-                        x.size(1) - self.max_train_length + 1
-                    )
-                    x = x[:, window_offset : window_offset + self.max_train_length]
-                x = x.to(self.device)
+        while self.current_epoch < self.cfg.SOLVER.EPOCHS:
+            self.train_epoch(self.current_epoch, repetition_id=repetition_id)
+            self.current_epoch += 1
+        print(
+            log_msg(
+                "repetition_id:{} Best accuracy:{} Epoch:{}".format(
+                    repetition_id, self.best_acc, self.best_epoch
+                ),
+                "EVAL",
+            )
+        )
 
-                ts_l = x.size(1)
-                crop_l = np.random.randint(
-                    low=2 ** (self.temporal_unit + 1), high=ts_l + 1
+        with open(os.path.join(self.log_path, "worklog.txt"), "a") as writer:
+            writer.write(
+                "repetition_id:{}\tbest_acc:{:.4f}\tepoch:{}".format(
+                    repetition_id, float(self.best_acc), self.best_epoch
                 )
-                crop_left = np.random.randint(ts_l - crop_l + 1)
-                crop_right = crop_left + crop_l
-                crop_eleft = np.random.randint(crop_left + 1)
-                crop_eright = np.random.randint(low=crop_right, high=ts_l + 1)
-                crop_offset = np.random.randint(
-                    low=-crop_eleft, high=ts_l - crop_eright + 1, size=x.size(0)
-                )
+            )
+            writer.write(os.linesep + "-" * 25 + os.linesep)
+        return self.best_acc, self.current_ckpt_path
 
-                self.optimizer.zero_grad()
-                out1 = self.model(
-                    take_per_row(x, crop_offset + crop_eleft, crop_right - crop_eleft)
-                )
-                out1 = out1[:, -crop_l:]
+    def train_epoch(self, epoch, repetition_id=0):
+        lr = self.cfg.SOLVER.LR
+        train_meters = {
+            "training_time": AverageMeter(),
+            # "data_time": AverageMeter(),
+            "loss_clr": AverageMeter(),
+            "loss_pred": AverageMeter(),
+            "top1": AverageMeter(),
+        }
+        num_iter = len(self.train_loader)
+        pbar = tqdm(range(num_iter))
 
-                out2 = self.model(
-                    take_per_row(x, crop_offset + crop_left, crop_eright - crop_left)
-                )
-                out2 = out2[:, :crop_l]
-                logger.debug(f"out1: {out1.shape}, out2: {out2.shape}")
-                loss = hierarchical_contrastive_loss(
-                    out1, out2, temporal_unit=self.temporal_unit
-                )
+        # train loops
+        self.model.train()
+        for idx, data in enumerate(self.train_loader):
+            msg, imgs = self.after_warmup_iter(data, epoch, train_meters, idx)
+            pbar.set_description(log_msg(msg, "TRAIN"))
+            pbar.update()
+            if not self.cfg.EXPERIMENT.DEBUG:
+                self.log(epoch, idx, train_meters)
 
-                loss.backward()
-                self.optimizer.step()
-                self.net.update_parameters(self.model)
+        # update lr
+        # get current lr
+        lr = self.optimizer.param_groups[0]["lr"]
+        if lr > self.cfg.SOLVER.SCHEDULER.MIN_LR:
+            self.scheduler.step()
 
-                cum_loss += loss.item()
-                n_epoch_iters += 1
+        pbar.close()
 
-                self.n_iters += 1
-            if interrupted:
-                break
+        # validate
+        if self.cfg.EXPERIMENT.TASK == "pretext":
+            test_acc, test_loss = 0, 0
+        else:
+            test_acc, test_loss = validate(self.val_loader, self.model)
 
-            cum_loss /= n_epoch_iters
-            loss_log.append(cum_loss)
-            logger.info(f"Epoch #{self.n_epochs}: loss={cum_loss}")
-            self.n_epochs += 1
-
-            # validate
-            if self.cfg.EXPERIMENT.TASK == "pretext":
-                test_acc, test_loss = 0, 0
-
+        # log
+        log_dict = OrderedDict(
+            {
+                "loss_clr": train_meters["loss_clr"].avg,
+                "loss_pred": train_meters["loss_pred"].avg,
+            }
+        )
+        if not self.cfg.EXPERIMENT.DEBUG:
+            self.log_worklog(epoch, log_dict)
             # saving checkpoint
             # saving occasional checkpoints
 
             state = {
-                "epoch": self.n_epochs,
+                "epoch": epoch,
                 "model_state_dict": self.model.state_dict(),
                 "model": self.cfg.MODEL.TYPE,
                 "optimizer": self.optimizer.state_dict(),
-                "best_acc": self.best_acc,
+                "scheduler": self.scheduler.state_dict(),
+                # "best_acc": self.best_acc,
+                # "loss": train_meters["losses"].avg,
                 "dataset": self.cfg.DATASET.TYPE,
             }
 
-            if (self.n_epochs + 1) % self.cfg.EXPERIMENT.CHECKPOINT_GAP == 0:
+            if (epoch + 1) % self.cfg.EXPERIMENT.CHECKPOINT_GAP == 0:
                 logger.info("Saving checkpoint to {}".format(self.log_path))
                 chkp_path = os.path.join(
                     self.log_path,
                     "checkpoints",
-                    "epoch_{}_chkp.tar".format(self.n_epochs),
+                    "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
+                )
+                torch.save(state, chkp_path)
+                self.current_ckpt_path = chkp_path
+
+        # save best checkpoint with loss or accuracy
+        if self.cfg.EXPERIMENT.TASK != "pretext":
+            if test_acc > self.best_acc:
+                chkp_path = os.path.join(
+                    self.log_path,
+                    "checkpoints",
+                    "epoch_best_{}_chkp.tar".format(repetition_id),
                 )
                 torch.save(state, chkp_path)
 
-        return loss_log
+    def after_warmup_iter(self, data, epoch, train_meters, data_itx: int = 0):
+        train_start_time = time.time()
+        x, _, _ = data
+        batch_size = x.size(0)
+        loss_clr = torch.tensor(0, dtype=torch.float32).cuda()
+        loss_pred = torch.tensor(0, dtype=torch.float32).cuda()
+        process_imgs = torch.tensor(0, dtype=torch.float32).cuda()
 
-    def _eval_with_pooling(self, x, mask=None, slicing=None, encoding_window=None):
-        out = self.net(x.to(self.device, non_blocking=True), mask)
-        if encoding_window == "full_series":
-            if slicing is not None:
-                out = out[:, slicing]
-            out = F.max_pool1d(
-                out.transpose(1, 2),
-                kernel_size=out.size(1),
-            ).transpose(1, 2)
+        loss_clr = self.clr_step(x)
 
-        elif isinstance(encoding_window, int):
-            out = F.max_pool1d(
-                out.transpose(1, 2),
-                kernel_size=encoding_window,
-                stride=1,
-                padding=encoding_window // 2,
-            ).transpose(1, 2)
-            if encoding_window % 2 == 0:
-                out = out[:, :-1]
-            if slicing is not None:
-                out = out[:, slicing]
+        train_meters["training_time"].update(time.time() - train_start_time)
+        train_meters["loss_clr"].update(
+            loss_clr.cpu().detach().numpy().mean(), batch_size
+        )
 
-        elif encoding_window == "multiscale":
-            p = 0
-            reprs = []
-            while (1 << p) + 1 < out.size(1):
-                t_out = F.max_pool1d(
-                    out.transpose(1, 2),
-                    kernel_size=(1 << (p + 1)) + 1,
-                    stride=1,
-                    padding=1 << p,
-                ).transpose(1, 2)
-                if slicing is not None:
-                    t_out = t_out[:, slicing]
-                reprs.append(t_out)
-                p += 1
-            out = torch.cat(reprs, dim=-1)
+        msg = "Epoch:{}|Time(train):{:.2f}|clr:{:.4f}|lr:{:.6f}".format(
+            epoch,
+            # train_meters["data_time"].avg,
+            train_meters["training_time"].avg,
+            train_meters["loss_clr"].avg,
+            self.optimizer.param_groups[0]["lr"],
+        )
 
-        else:
-            if slicing is not None:
-                out = out[:, slicing]
+        return msg, process_imgs
 
-        return out.cpu()
+    def clr_step(self, x):
+        # clr step
+        self.optimizer.zero_grad()
+        x = x.float().cuda()
+        x = x.transpose(1, 2)
+        ts_l = x.size(1)
+        crop_l = np.random.randint(low=2 ** (self.temporal_unit + 1), high=ts_l + 1)
+        crop_left = np.random.randint(ts_l - crop_l + 1)
+        crop_right = crop_left + crop_l
+        crop_eleft = np.random.randint(crop_left + 1)
+        crop_eright = np.random.randint(low=crop_right, high=ts_l + 1)
+        crop_offset = np.random.randint(
+            low=-crop_eleft, high=ts_l - crop_eright + 1, size=x.size(0)
+        )
 
-    def encode(
-        self,
-        data,
-        mask=None,
-        encoding_window=None,
-        causal=False,
-        sliding_length=None,
-        sliding_padding=0,
-        batch_size=None,
-    ):
-        """Compute representations using the model.
+        out1, out2 = self.model(
+            self.take_per_row(
+                x, crop_offset + crop_eleft, crop_right - crop_eleft
+            ).transpose(1, 2),
+            self.take_per_row(
+                x, crop_offset + crop_left, crop_eright - crop_left
+            ).transpose(1, 2),
+        )
+        # out1 = out1.squeeze(-1)
+        # out2 = out2.squeeze(-1)
 
-        Args:
-            data (numpy.ndarray): This should have a shape of (n_instance, n_timestamps, n_features). All missing data should be set to NaN.
-            mask (str): The mask used by encoder can be specified with this parameter. This can be set to 'binomial', 'continuous', 'all_true', 'all_false' or 'mask_last'.
-            encoding_window (Union[str, int]): When this param is specified, the computed representation would the max pooling over this window. This can be set to 'full_series', 'multiscale' or an integer specifying the pooling kernel size.
-            causal (bool): When this param is set to True, the future informations would not be encoded into representation of each timestamp.
-            sliding_length (Union[int, NoneType]): The length of sliding window. When this param is specified, a sliding inference would be applied on the time series.
-            sliding_padding (int): This param specifies the contextual data length used for inference every sliding windows.
-            batch_size (Union[int, NoneType]): The batch size used for inference. If not specified, this would be the same batch size as training.
+        # b, t1, c1 = out1.shape
+        # b, t2, c2 = out2.shape
+        # t_min = min(t1, t2)
+        # c_min = min(c1, c2)
+        # out1 = out1[:, :t_min, :c_min]
+        # out2 = out2[:, :t_min, :c_min]
+        out1 = out1[:, -crop_l:]
+        out2 = out2[:, :crop_l]
 
-        Returns:
-            repr: The representations for data.
-        """
-        assert self.net is not None, "please train or load a net first"
-        assert data.ndim == 3
-        if batch_size is None:
-            batch_size = self.batch_size
-        n_samples, ts_l, _ = data.shape
+        loss_clr = self.clr_criterion(out1, out2)
 
-        org_training = self.net.training
-        self.net.eval()
+        loss_clr = loss_clr.mean()
 
-        with torch.no_grad():
-            output = []
-            for batch in self.train_loader:
-                x = batch[0]
-                if sliding_length is not None:
-                    reprs = []
-                    if n_samples < batch_size:
-                        calc_buffer = []
-                        calc_buffer_l = 0
-                    for i in range(0, ts_l, sliding_length):
-                        l = i - sliding_padding
-                        r = i + sliding_length + (sliding_padding if not causal else 0)
-                        x_sliding = torch_pad_nan(
-                            x[:, max(l, 0) : min(r, ts_l)],
-                            left=-l if l < 0 else 0,
-                            right=r - ts_l if r > ts_l else 0,
-                            dim=1,
-                        )
-                        if n_samples < batch_size:
-                            if calc_buffer_l + n_samples > batch_size:
-                                out = self._eval_with_pooling(
-                                    torch.cat(calc_buffer, dim=0),
-                                    mask,
-                                    slicing=slice(
-                                        sliding_padding, sliding_padding + sliding_length
-                                    ),
-                                    encoding_window=encoding_window,
-                                )
-                                reprs += torch.split(out, n_samples)
-                                calc_buffer = []
-                                calc_buffer_l = 0
-                            calc_buffer.append(x_sliding)
-                            calc_buffer_l += n_samples
-                        else:
-                            out = self._eval_with_pooling(
-                                x_sliding,
-                                mask,
-                                slicing=slice(
-                                    sliding_padding, sliding_padding + sliding_length
-                                ),
-                                encoding_window=encoding_window,
-                            )
-                            reprs.append(out)
+        # backward
+        self.optimizer.zero_grad()
+        loss_clr.backward()
+        self.optimizer.step()
 
-                    if n_samples < batch_size:
-                        if calc_buffer_l > 0:
-                            out = self._eval_with_pooling(
-                                torch.cat(calc_buffer, dim=0),
-                                mask,
-                                slicing=slice(
-                                    sliding_padding, sliding_padding + sliding_length
-                                ),
-                                encoding_window=encoding_window,
-                            )
-                            reprs += torch.split(out, n_samples)
-                            calc_buffer = []
-                            calc_buffer_l = 0
+        return loss_clr
 
-                    out = torch.cat(reprs, dim=1)
-                    if encoding_window == "full_series":
-                        out = F.max_pool1d(
-                            out.transpose(1, 2).contiguous(),
-                            kernel_size=out.size(1),
-                        ).squeeze(1)
-                else:
-                    out = self._eval_with_pooling(
-                        x, mask, encoding_window=encoding_window
-                    )
-                    if encoding_window == "full_series":
-                        out = out.squeeze(1)
-
-                output.append(out)
-
-            output = torch.cat(output, dim=0)
-
-        self.net.train(org_training)
-        return output.numpy()
+    @staticmethod
+    def take_per_row(A, indx, num_elem):
+        all_indx = indx[:, None] + np.arange(num_elem)
+        return A[torch.arange(all_indx.shape[0])[:, None], all_indx]
