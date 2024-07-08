@@ -24,8 +24,9 @@ from models import model_dict, criterion_dict
 
 from loguru import logger
 
+
 def train(cfg):
-    if cfg.EXPERIMENT.CHECKPOINT_GAP<cfg.SOLVER.EPOCHS:
+    if cfg.EXPERIMENT.CHECKPOINT_GAP > cfg.SOLVER.EPOCHS:
         raise "no enough epochs for ckpt"
 
     ###############
@@ -111,6 +112,7 @@ def train(cfg):
         writer.write(os.linesep + "-" * 25 + os.linesep)
     return ckpts, trainer.log_path
 
+
 def linear_eval(cfg, ckpts=None, log_path=None):
     train_loader = get_data_loader_from_dataset(
         cfg.DATASET.ROOT + "/{}".format(cfg.DATASET.TYPE) + "/train",
@@ -144,15 +146,14 @@ def linear_eval(cfg, ckpts=None, log_path=None):
 
         for filename in os.listdir(os.path.join(log_path, "checkpoints")):
             if "eval" not in filename:
-                parts = filename.split('_')
+                parts = filename.split("_")
                 if len(parts) > 1 and parts[1].isdigit():
                     number = int(parts[1])
                     if number > max_epoch:
                         max_epoch = number
-        for filename in os.listdir()
-        ckpts = [os.path.join(log_path,"checkpoints",filename)]
-        elif number == max_epoch:
-            ckpts.append(os.path.join(log_path,"checkpoints", filename))
+                        ckpts = [os.path.join(log_path, "checkpoints", filename)]
+                    elif number == max_epoch:
+                        ckpts.append(os.path.join(log_path, "checkpoints", filename))
     for ckpt in ckpts:
         pretrained_dict = torch.load(ckpt)
 
@@ -185,8 +186,13 @@ def linear_eval(cfg, ckpts=None, log_path=None):
 
     print(
         log_msg(
-            "best_acc(mean±std)\t{:.2f} ± {:.2f}\t{}".format(
-                mean(best_acc_l), pstdev(best_acc_l), best_acc_l
+            "best_acc(mean±std)\t{:.2f} ± {:.2f}\t{}\nknn_acc(mean±std)\t{:.2f} ± {:.2f}\t{}\n".format(
+                mean(best_acc_l),
+                pstdev(best_acc_l),
+                best_acc_l,
+                mean(knn_acc_l),
+                pstdev(knn_acc_l),
+                knn_acc_l,
             ),
             "INFO",
         )
@@ -196,13 +202,13 @@ def linear_eval(cfg, ckpts=None, log_path=None):
     with open(os.path.join(trainer.log_path, "worklog_linear.txt"), "a") as writer:
         writer.write("CONFIG:\n{}".format(cfg.dump()))
         writer.write(os.linesep + "-" * 25 + os.linesep)
-        
+
         writer.write(
             "best_acc(mean±std)\t{:.2f} ± {:.2f}\t{}\n".format(
                 mean(best_acc_l), pstdev(best_acc_l), best_acc_l
             )
         )
-        
+
         writer.write(
             "knn_acc(mean±std)\t{:.2f} ± {:.2f}\t{}\n".format(
                 mean(knn_acc_l), pstdev(knn_acc_l), knn_acc_l
@@ -210,6 +216,7 @@ def linear_eval(cfg, ckpts=None, log_path=None):
         )
 
         writer.write(os.linesep + "-" * 25 + os.linesep)
+
 
 if __name__ == "__main__":
 
@@ -226,7 +233,7 @@ if __name__ == "__main__":
             logger.info("eval only, linear eval")
             linear_eval(cfg)
     else:
-        ckpts = train(cfg)
+        ckpts, log_path = train(cfg)
         if cfg.EXPERIMENT.EVAL_NEXT == True:
             if cfg.EXPERIMENT.EVAL_LINEAR == True:
-                linear_eval(cfg, ckpts)
+                linear_eval(cfg, ckpts, log_path)

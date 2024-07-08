@@ -45,11 +45,13 @@ def KNN_validate(train_loader, val_loader):
     knn = KNeighborsClassifier(n_neighbors=1)
     train_feature, train_label = train_loader.dataset.tensors
     train_feature = train_feature.cpu().numpy()
+    train_feature = train_feature.squeeze()
     train_label = train_label.cpu().numpy()
     knn.fit(train_feature, train_label)
 
     val_feature, val_label = val_loader.dataset.tensors
     val_feature = val_feature.cpu().numpy()
+    val_feature=val_feature.squeeze()
     val_label = val_label.cpu().numpy()
     pred = knn.predict(val_feature)
     acc = accuracy_score(val_label, pred)

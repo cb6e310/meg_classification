@@ -155,7 +155,7 @@ class LinearEvalTrainer:
                 elif "TSEncoder" in self.cfg.MODEL.ARGS.BACKBONE:
                     h = self.model(x)
             h = h.detach()
-
+            h=h.squeeze()
             feature_vector.extend(h.cpu().detach().numpy())
             labels_vector.extend(y.numpy())
 

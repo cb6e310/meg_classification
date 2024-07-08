@@ -593,6 +593,8 @@ class Ts2vec(BaseNet):
             x_j = torch.unsqueeze(x_j, -1)
         h_i = self.backbone(x_i)[0][1].unsqueeze(1)
         h_j = self.backbone(x_j)[0][1].unsqueeze(1)
+        if return_embedding:
+            return h_i
         return h_i, h_j
 
 class SimCLR(BaseNet):

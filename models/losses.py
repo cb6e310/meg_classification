@@ -105,6 +105,8 @@ class NT_Xent(nn.Module):
         We do not sample negative examples explicitly.
         Instead, given a positive pair, similar to (Chen et al., 2017), we treat the other 2(N − 1) augmented examples within a minibatch as negative examples.
         """
+        z_i = z_i.squeeze()
+        z_j = z_j.squeeze()
         mask = self.mask_correlated_samples(z_i.shape[0])
         N = 2 * z_i.shape[0]
         # logger.debug(z_i.shape)

@@ -1,38 +1,38 @@
 EXPERIMENT:
-  NAME: "TS2Vec_Pretrain"
+  NAME: "ts2vec_Pretrain"
   TAG: "baselines"
   PROJECT: "baseline project"
   DEBUG: False
   REPETITION_NUM: 3 # Number of repetition times
   TASK: "pretext"
-  RESUME : False  # Resume training
-  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
-  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
-  CHECKPOINT_GAP: 10
+  RESUME: False # Resume training
+  CHECKPOINT: "" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX: None # Choose index of checkpoint to start from. If None, uses the latest chkp
+  CHECKPOINT_GAP: 2
   SEED: 42
   KNN: True
   EVAL_ONLY: True
   EVAL_NEXT: True
   EVAL_LINEAR: True
-  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/TS2Vec_Pretrain_2024-07-08_06-56-46"
+  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/ts2vec_Pretrain_2024-07-08_07-26-10"
 DATASET:
-  ROOT: "/home/song/datasets/EEG"
-  TYPE: "sleepedf20"
-  CHANNELS: 1
-  POINTS: 3000
-  NUM_CLASSES: 5
+  ROOT: "/home/song/datasets/MEG"
+  TYPE: "CamCAN"
+  CHANNELS: 204
+  POINTS: 100
+  NUM_CLASSES: 2
   TEST:
     BATCH_SIZE: 128
 MODEL:
   TYPE: "ts2vec"
   ARGS:
-    BACKBONE: "eegconvnet"
+    BACKBONE: "varcnn"
     TEMPERATURE: 0.5
     SIAMESE: True
-    N_FEATURES: 256
-    PROJECTION_DIM: 256
-    PROJECTION_HIDDEN_SIZE: 2048
-    # SOURCE_CHANNELS: 36
+    PROJECTION_DIM: 128
+    PROJECTION_HIDDEN_SIZE: 4096
+    N_FEATURES: 1800
+    SOURCE_CHANNELS: 36
   CRITERION:
     TYPE: "NT_Xent"
     ARGS:
@@ -41,7 +41,7 @@ MODEL:
 SOLVER:
   TRAINER: "TS2Vec"
   BATCH_SIZE: 256
-  EPOCHS: 10
+  EPOCHS: 2
   META_LR: 0.01
   LR: 0.05
   SCHEDULER:

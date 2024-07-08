@@ -8,7 +8,7 @@ EXPERIMENT:
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
-  CHECKPOINT_GAP: 10
+  CHECKPOINT_GAP: 5
   SEED: 42
   KNN: True
   EVAL_ONLY: False
@@ -30,9 +30,9 @@ MODEL:
     TEMPERATURE: 0.5
     SIAMESE: True
     PROJECTION_DIM: 128
-    N_FEATURES: 4500
+    N_FEATURES: 22500
     PROJECTION_HIDDEN_SIZE: 4096
-    SOURCE_CHANNELS: 36
+    SOURCE_CHANNELS: 180
   CRITERION:
     TYPE: "NT_Xent"
     ARGS:

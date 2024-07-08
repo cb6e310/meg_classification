@@ -46,8 +46,7 @@ class Ts2vecTrainer:
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.clr_criterion = hierarchical_contrastive_loss
-        self.pred_criterion = criterion
+        self.clr_criterion = criterion
         # self.pred_criterion = torch.nn.BCEWithLogitsLoss().cuda()
         self.temporal_unit = 0.5
         self.model = model
@@ -74,7 +73,7 @@ class Ts2vecTrainer:
                 if not os.path.exists(self.log_path):
                     os.makedirs(self.log_path)
                 save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-                os.mkdir(os.path.join(self.log_path, "checkpoints"))
+                os.makedirs(os.path.join(self.log_path, "checkpoints"),exist_ok=True)
                 chosen_chkp = None
                 logger.info("Start from scratch.")
 
@@ -363,6 +362,11 @@ class Ts2vecTrainer:
         # out2 = out2[:, :t_min, :c_min]
         out1 = out1[:, -crop_l:]
         out2 = out2[:, :crop_l]
+        b, t1, c1 = out1.shape
+        b, t2, c2 = out2.shape
+        c_min = min(c1, c2)
+        out1 = out1[:, :, :c_min]
+        out2 = out2[:, :, :c_min]
 
         loss_clr = self.clr_criterion(out1, out2)
 
