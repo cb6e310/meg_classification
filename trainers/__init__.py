@@ -7,6 +7,7 @@ from trainers.current_trainer import CurrentTrainer
 from trainers.current_simclr_trainer import CurrentSimCLRTrainer
 from trainers.equimod_trainer import EquimodTrainer
 from trainers.infots_trainer import InfoTSTrainer
+from trainers.semi_eval_trainer import SemiEvalTrainer
 
 trainer_dict = {
     "base": BaseTrainer,
@@ -17,5 +18,6 @@ trainer_dict = {
     "current": CurrentTrainer,
     "currentsimclr": CurrentSimCLRTrainer,
     "equimod": EquimodTrainer,
-    "InfoTS": InfoTSTrainer
+    "InfoTS": InfoTSTrainer,
+    "semi_eval": SemiEvalTrainer
 }

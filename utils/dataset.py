@@ -107,29 +107,37 @@ def get_data_loader_from_dataset(
     if dataset_path.startswith("/home"):
         data = []
         labels = []
-        for cur_file in os.listdir(dataset_path):
-            # HLTS decoding format
-            if cur_file.endswith("pt"):
-                cur_dataset = torch.load(os.path.join(dataset_path, cur_file))
-                cur_data = cur_dataset["samples"]
-                cur_labels = cur_dataset["labels"]
+        if os.path.isdir(dataset_path):
+            for cur_file in os.listdir(dataset_path):
+                # HLTS decoding format
+                if cur_file.endswith("pt"):
+                    cur_dataset = torch.load(os.path.join(dataset_path, cur_file))
+                    cur_data = cur_dataset["samples"]
+                    cur_labels = cur_dataset["labels"]
 
-            # Fan decoding format
-            elif cur_file.endswith("npz"):
-                cur_dataset = np.load(os.path.join(dataset_path, cur_file))
-                cur_data = cur_dataset["data"]
-                cur_labels = cur_dataset["labels"]
+                # Fan decoding format
+                elif cur_file.endswith("npz"):
+                    cur_dataset = np.load(os.path.join(dataset_path, cur_file))
+                    cur_data = cur_dataset["data"]
+                    cur_labels = cur_dataset["labels"]
 
-            elif  "sleepedf20" in cfg.DATASET.TYPE  and cur_file.endswith("npy"):
-                cur_dataset = np.load(os.path.join(dataset_path, cur_file))
-                cur_data = cur_dataset[:, :-1]
-                cur_data = np.expand_dims(cur_data, axis=1)
-                cur_labels = cur_dataset[:, -1]
+                elif  "sleepedf20" in cfg.DATASET.TYPE  and cur_file.endswith("npy"):
+                    cur_dataset = np.load(os.path.join(dataset_path, cur_file))
+                    cur_data = cur_dataset[:, :-1]
+                    cur_data = np.expand_dims(cur_data, axis=1)
+                    cur_labels = cur_dataset[:, -1]
 
-            else:
-                continue
-            data.append(cur_data)
-            labels.append(cur_labels)
+                else:
+                    continue
+                data.append(cur_data)
+                labels.append(cur_labels)
+        elif "semi" in dataset_path:
+            dataset_path = np.load(dataset_path)
+            x_train_labeled = dataset_path['data_labeled']
+            y_train_labeled = dataset_path['labels_labeled']
+            data.append(x_train_labeled)
+            labels.append(y_train_labeled)
+
         data = np.concatenate(data, axis=0)
         labels = np.concatenate(labels, axis=0)
         logger.info("data info:", data.shape, labels.shape)
@@ -142,6 +150,7 @@ def get_data_loader_from_dataset(
         )
         assert data.dtype == np.float32 or torch.float32
         # and label.dtype == np.longlong
+        
 
         if siamese:
             dataset = SimpleDataset(data, labels)

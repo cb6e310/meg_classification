@@ -1,7 +1,7 @@
 EXPERIMENT:
-  NAME: "byol_pretext"
-  TAG: "baselines"
-  PROJECT: "baseline project"
+  NAME: "current_pretext"
+  TAG: "proposed"
+  PROJECT: "proposed project"
   DEBUG: False
   REPETITION_NUM: 3 # Number of repetition times
   TASK: "pretext"

@@ -113,6 +113,128 @@ def train(cfg):
     return ckpts, trainer.log_path
 
 
+def semi_eval(cfg, ckpts=None, log_path=None):
+    semi_list = ["train_semi_supervised_1.npz", "train_semi_supervised_10.npz"]
+    semi_path = cfg.EVAL_SEMI.DATA_PATH
+
+    train_loader_100 = get_data_loader_from_dataset(
+        cfg.DATASET.ROOT + "/{}".format(cfg.DATASET.TYPE) + "/train",
+        cfg,
+        train=True,
+        batch_size=cfg.EVAL_LINEAR.BATCH_SIZE,
+        siamese=cfg.MODEL.ARGS.SIAMESE,
+    )
+    train_loader_10 = get_data_loader_from_dataset(
+        os.path.join(semi_path, "train_semi_supervised_10.npz"),
+        cfg,
+        train=True,
+        batch_size=cfg.EVAL_LINEAR.BATCH_SIZE,
+        siamese=cfg.MODEL.ARGS.SIAMESE,
+    )
+    train_loader_1 = get_data_loader_from_dataset(
+        os.path.join(semi_path, "train_semi_supervised_1.npz"),
+        cfg,
+        train=True,
+        batch_size=cfg.EVAL_LINEAR.BATCH_SIZE,
+        siamese=cfg.MODEL.ARGS.SIAMESE,
+    )
+    train_loader_dict = {
+        "100": train_loader_100,
+        "10": train_loader_10,
+        "1": train_loader_1,
+    }
+
+    val_loader = get_data_loader_from_dataset(
+        cfg.DATASET.ROOT + "/{}".format(cfg.DATASET.TYPE) + "/test",
+        cfg,
+        train=False,
+        batch_size=cfg.EVAL_LINEAR.BATCH_SIZE,
+        siamese=cfg.MODEL.ARGS.SIAMESE,
+    )
+
+    if cfg.SOLVER.TRAINER == "InfoTS":
+        aug = InfoTSAUG(cfg).cuda()
+    else:
+        aug = AutoAUG(cfg).cuda()
+
+    model = model_dict[cfg.MODEL.TYPE][0](cfg).cuda()
+    logger.info("model's device: {}".format(next(model.parameters()).device))
+    if ckpts == None:
+        # eval only mode, retrieve from early record
+        log_path = cfg.EXPERIMENT.PRETRAINED_PATH
+        max_epoch = -1
+        ckpts = []
+
+        for filename in os.listdir(os.path.join(log_path, "checkpoints")):
+            if "eval" not in filename:
+                parts = filename.split("_")
+                if len(parts) > 1 and parts[1].isdigit():
+                    number = int(parts[1])
+                    if number > max_epoch:
+                        max_epoch = number
+                        ckpts = [os.path.join(log_path, "checkpoints", filename)]
+                    elif number == max_epoch:
+                        ckpts.append(os.path.join(log_path, "checkpoints", filename))
+    with open(os.path.join(log_path, "worklog_semi.txt"), 'w'):
+        pass
+    best_acc_dict = {"100": [], "10": [], "1": []}
+    for frac, train_loader in train_loader_dict.items():
+        best_acc_l = []
+        logger.info("current frac: {} %".format(frac))
+        for ckpt in ckpts:
+            pretrained_dict = torch.load(ckpt)
+
+            model.load_state_dict(pretrained_dict["model_state_dict"])
+
+            logger.info(
+                "Loaded pretrained model from {}".format(ckpt),
+                "pretrained epoch: {}".format(pretrained_dict["epoch"]),
+            )
+
+            classifier = model_dict[cfg.EVAL_LINEAR.CLASSIFIER][0](cfg).cuda()
+
+            criterion = criterion_dict[cfg.EVAL_LINEAR.CRITERION](cfg).cuda()
+
+            # train
+            trainer = trainer_dict["semi_eval"](
+                log_path,
+                model,
+                classifier,
+                criterion,
+                train_loader,
+                val_loader,
+                cfg,
+            )
+            best_acc = trainer.train()
+            best_acc_l.append(float(best_acc))
+            del trainer
+
+        logger.info(
+            "best_acc(mean±std)\t{:.2f} ± {:.2f}\t{}\n".format(
+                mean(best_acc_l),
+                pstdev(best_acc_l),
+                best_acc_l,
+            ),
+        )
+
+        best_acc_dict[frac] = best_acc_l
+
+    logger.info("save at {}".format(log_path))
+
+    with open(os.path.join(log_path, "worklog_semi.txt"), "a") as writer:
+        writer.write("CONFIG:\n{}".format(cfg.dump()))
+        writer.write(os.linesep + "-" * 25 + os.linesep)
+
+        for frac, best_acc_l in best_acc_dict.items():
+            writer.write(
+                "frac: {}\tbest_acc(mean±std)\t{:.2f} ± {:.2f}\t{}\n".format(
+                    frac, mean(best_acc_l), pstdev(best_acc_l), best_acc_l
+                )
+            )
+
+            writer.write(os.linesep + "-" * 25 + os.linesep)
+
+
 def linear_eval(cfg, ckpts=None, log_path=None):
     train_loader = get_data_loader_from_dataset(
         cfg.DATASET.ROOT + "/{}".format(cfg.DATASET.TYPE) + "/train",
@@ -232,8 +354,13 @@ if __name__ == "__main__":
         if cfg.EXPERIMENT.EVAL_LINEAR == True:
             logger.info("eval only, linear eval")
             linear_eval(cfg)
+        if cfg.EXPERIMENT.EVAL_SEMI == True:
+            logger.info("eval only, semi eval")
+            semi_eval(cfg)
     else:
         ckpts, log_path = train(cfg)
         if cfg.EXPERIMENT.EVAL_NEXT == True:
             if cfg.EXPERIMENT.EVAL_LINEAR == True:
                 linear_eval(cfg, ckpts, log_path)
+            if cfg.EXPERIMNET.EVAL_SEMI == True:
+                semi_eval(cfg, ckpts, log_path)

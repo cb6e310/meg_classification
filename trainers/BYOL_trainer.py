@@ -51,6 +51,7 @@ class BYOLTrainer:
         self.resume_epoch = -1
 
         self.current_epoch = 0
+        self.current_ckpt=""
 
         username = getpass.getuser()
         # init loggers
@@ -58,13 +59,13 @@ class BYOLTrainer:
             # self.tf_writer = SummaryWriter(os.path.join(self.log_path, "train.events"))
 
             if not cfg.EXPERIMENT.RESUME:
-                cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-                experiment_name = experiment_name + "_" + cur_time
+                # cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+                # experiment_name = experiment_name + "_" + cur_time
                 self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
                 if not os.path.exists(self.log_path):
                     os.makedirs(self.log_path)
                 save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-                os.mkdir(os.path.join(self.log_path, "checkpoints"))
+                os.makedirs(os.path.join(self.log_path, "checkpoints"),exist_ok=True)
                 chosen_chkp = None
                 logger.info("Start from scratch.")
 
@@ -198,7 +199,7 @@ class BYOLTrainer:
                 )
             )
             writer.write(os.linesep + "-" * 25 + os.linesep)
-        return self.best_acc
+        return self.best_acc, self.current_ckpt
 
     def train_epoch(self, epoch, repetition_id=0):
         lr = self.cfg.SOLVER.LR
@@ -265,6 +266,7 @@ class BYOLTrainer:
                     "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
                 )
                 torch.save(state, chkp_path)
+                self.current_ckpt=chkp_path
 
         # save best checkpoint with loss or accuracy
         if self.cfg.EXPERIMENT.TASK != "pretext":

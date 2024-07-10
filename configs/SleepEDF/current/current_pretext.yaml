@@ -61,4 +61,4 @@ EVAL_LINEAR:
     GAMMA: 0.99
     MIN_LR: 0.001
 EVAL_SEMI:
-  DATA_PATH:""
+  DATA_PATH: "/home/song/datasets/EEG/sleepedf20/semi_train"
