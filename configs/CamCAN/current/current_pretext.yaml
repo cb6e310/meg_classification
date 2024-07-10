@@ -4,7 +4,7 @@ EXPERIMENT:
   PROJECT: "proposed project"
   DEBUG: False 
   LOG_IMAGES: False
-  REPETITION_NUM: 1 # Number of repetition times
+  REPETITION_NUM: 3 # Number of repetition times
   TASK: "pretext"
   RESUME : False # Resume training
   CHECKPOINT : "proposed project/current_pretext_2024-05-25_11-14-32" # 'Log_2020-03-19_19-53-27'

@@ -29,6 +29,7 @@ MODEL:
     SIAMESE: True
     USE_MOMENTUM: True  # True for BYOL, False for SimSiam
     HIDDEN_LAYER: -1
+    N_FEATURES: 256
     PROJECTION_DIM: 256
     PROJECTION_HIDDEN_SIZE: 2048
     TAU_BASE: 0.996
@@ -43,7 +44,7 @@ MODEL:
 SOLVER:
   TRAINER: "current"
   BATCH_SIZE: 256
-  EPOCHS: 40
+  EPOCHS: 10
   LR: 0.001
   SCHEDULER:
     TYPE: "ExponentialLR"
@@ -59,4 +60,5 @@ EVAL_LINEAR:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
     MIN_LR: 0.001
-
+EVAL_SEMI:
+  DATA_PATH:""
