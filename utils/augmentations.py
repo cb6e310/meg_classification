@@ -60,7 +60,7 @@ class AutoAUG(Module):
 
     @staticmethod
     def random_timereverse(x):
-        output = TimeReverse()(x)
+        output = TimeReverse(random=True)(x)
         return output
 
     @staticmethod
@@ -158,7 +158,7 @@ class AutoAUG(Module):
             return spec_x, labels
 
         elif step == "equimod_pred":
-            spec_x, labels = self.random_jitter(x)
+            spec_x, labels = self.random_timereverse(x)
             spec_x = self.sensitive_base_augs(spec_x)
             # spec_x = self.Normalize(spec_x)
             spec_x = spec_x.transpose(1, 2)

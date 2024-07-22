@@ -1,0 +1,43 @@
+EXPERIMENT:
+  NAME: "current_linear_eval"
+  TAG: "proposed"
+  PROJECT: "proposed project"
+  DEBUG: False
+  REPETITION_NUM: 1 # Number of repetition times
+  TASK: "train"
+  RESUME : False  # Resume training
+  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  KNN: True
+DATASET:
+  ROOT: "/home/song/datasets/MEG"
+  TYPE: "CamCAN"
+  CHANNELS: 204
+  POINTS: 100
+  NUM_CLASSES: 2
+  TEST:
+    BATCH_SIZE: 128
+MODEL:
+  TYPE: "Equimod"
+  ARGS:
+    BACKBONE: "varcnn"
+    SIAMESE: True
+    N_FEATURES: 9000 # backbone output feature dimension
+    PROJECTION_DIM: 256
+    HIDDEN_LAYER: -1
+    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    PROJECTION_HIDDEN_SIZE: 4096
+    TAU_BASE: 0.996
+    CLASSIFIER: "LinearClassifier"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/equimod_pretext_2024-07-04_07-48-02/checkpoints/epoch_9_0_chkp.tar"
+    SOURCE_CHANNELS: 180
+  CRITERION:
+    TYPE: "CE"
+SOLVER:
+  BATCH_SIZE: 512
+  EPOCHS: 200
+  LR: 0.01
+  SCHEDULER:
+    TYPE: "ExponentialLR"
+    GAMMA: 0.99
+    MIN_LR: 0.0001

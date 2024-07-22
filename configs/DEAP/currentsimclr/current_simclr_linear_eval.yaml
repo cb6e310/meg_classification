@@ -1,0 +1,42 @@
+EXPERIMENT:
+  NAME: "current_linear_eval"
+  TAG: "proposed"
+  PROJECT: "proposed project"
+  DEBUG: False
+  REPETITION_NUM: 1 # Number of repetition times
+  TASK: "train"
+  RESUME : False  # Resume training
+  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+DATASET:
+  ROOT: "/home/song/datasets/EEG"
+  TYPE: "sleepedf20v2"
+  CHANNELS: 1
+  POINTS: 3000
+  NUM_CLASSES: 5
+  TEST:
+    BATCH_SIZE: 128
+MODEL:
+  TYPE: "CurrentSimCLR"
+  ARGS:
+    BACKBONE: "eegconvnet"
+    SIAMESE: True
+    N_FEATURES: 256 # backbone output feature dimension
+    PROJECTION_DIM: 256 
+    HIDDEN_LAYER: -1
+    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
+    PROJECTION_HIDDEN_SIZE: 2048
+    TAU_BASE: 0.996
+    CLASSIFIER: "LinearClassifier"
+    PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/proposed project/current_pretext_2024-06-20_03-40-21/checkpoints/epoch_9_0_chkp.tar"
+    # SOURCE_CHANNELS: 36
+  CRITERION:
+    TYPE: "CE"
+SOLVER:
+  BATCH_SIZE: 512
+  EPOCHS: 200
+  LR: 0.01
+  SCHEDULER:
+    TYPE: "ExponentialLR"
+    GAMMA: 0.99
+    MIN_LR: 0.0001

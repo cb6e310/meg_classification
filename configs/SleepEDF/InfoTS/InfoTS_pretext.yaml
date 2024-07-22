@@ -13,7 +13,8 @@ EXPERIMENT:
   KNN: True
   EVAL_ONLY: True
   EVAL_NEXT: True
-  EVAL_LINEAR: True
+  EVAL_LINEAR: False
+  EVAL_SEMI: True
   PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/InfoTS_Pretrain_2024-07-04_11-20-21"
 DATASET:
   ROOT: "/home/song/datasets/EEG"
@@ -40,7 +41,7 @@ MODEL:
       # SOURCE_CHANNELS: 36
 SOLVER:
   TRAINER: "InfoTS"
-  BATCH_SIZE: 256
+  BATCH_SIZE: 128
   EPOCHS: 10
   META_LR: 0.01
   LR: 0.05
@@ -50,7 +51,7 @@ SOLVER:
     MIN_LR: 0.0001
 EVAL_LINEAR:
   CLASSIFIER: "LinearClassifier"
-  BATCH_SIZE: 512
+  BATCH_SIZE: 128
   EPOCHS: 200
   LR: 0.5
   CRITERION: "CE"
@@ -58,3 +59,5 @@ EVAL_LINEAR:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
     MIN_LR: 0.001
+EVAL_SEMI:
+  DATA_PATH: "/home/song/datasets/EEG/sleepedf20/semi_train"

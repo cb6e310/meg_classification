@@ -121,21 +121,21 @@ def semi_eval(cfg, ckpts=None, log_path=None):
         cfg.DATASET.ROOT + "/{}".format(cfg.DATASET.TYPE) + "/train",
         cfg,
         train=True,
-        batch_size=cfg.EVAL_LINEAR.BATCH_SIZE,
+        batch_size=cfg.EVAL_SEMI.BATCH_SIZE,
         siamese=cfg.MODEL.ARGS.SIAMESE,
     )
     train_loader_10 = get_data_loader_from_dataset(
         os.path.join(semi_path, "train_semi_supervised_10.npz"),
         cfg,
         train=True,
-        batch_size=cfg.EVAL_LINEAR.BATCH_SIZE,
+        batch_size=cfg.EVAL_SEMI.BATCH_SIZE,
         siamese=cfg.MODEL.ARGS.SIAMESE,
     )
     train_loader_1 = get_data_loader_from_dataset(
         os.path.join(semi_path, "train_semi_supervised_1.npz"),
         cfg,
         train=True,
-        batch_size=cfg.EVAL_LINEAR.BATCH_SIZE,
+        batch_size=cfg.EVAL_SEMI.BATCH_SIZE,
         siamese=cfg.MODEL.ARGS.SIAMESE,
     )
     train_loader_dict = {
@@ -148,7 +148,7 @@ def semi_eval(cfg, ckpts=None, log_path=None):
         cfg.DATASET.ROOT + "/{}".format(cfg.DATASET.TYPE) + "/test",
         cfg,
         train=False,
-        batch_size=cfg.EVAL_LINEAR.BATCH_SIZE,
+        batch_size=cfg.EVAL_SEMI.BATCH_SIZE,
         siamese=cfg.MODEL.ARGS.SIAMESE,
     )
 
@@ -175,9 +175,13 @@ def semi_eval(cfg, ckpts=None, log_path=None):
                         ckpts = [os.path.join(log_path, "checkpoints", filename)]
                     elif number == max_epoch:
                         ckpts.append(os.path.join(log_path, "checkpoints", filename))
-    with open(os.path.join(log_path, "worklog_semi.txt"), 'w'):
+    with open(os.path.join(log_path, "worklog_semi.txt"), "w"):
         pass
-    best_acc_dict = {"100": [], "10": [], "1": []}
+    best_acc_dict = {
+        "100": [], 
+        "10": [], 
+        "1": []
+        }
     for frac, train_loader in train_loader_dict.items():
         best_acc_l = []
         logger.info("current frac: {} %".format(frac))
@@ -197,6 +201,7 @@ def semi_eval(cfg, ckpts=None, log_path=None):
 
             # train
             trainer = trainer_dict["semi_eval"](
+                frac,
                 log_path,
                 model,
                 classifier,
@@ -276,7 +281,7 @@ def linear_eval(cfg, ckpts=None, log_path=None):
                         ckpts = [os.path.join(log_path, "checkpoints", filename)]
                     elif number == max_epoch:
                         ckpts.append(os.path.join(log_path, "checkpoints", filename))
-    for ckpt in ckpts:
+    for i, ckpt in enumerate(ckpts):
         pretrained_dict = torch.load(ckpt)
 
         model.load_state_dict(pretrained_dict["model_state_dict"])
@@ -302,7 +307,7 @@ def linear_eval(cfg, ckpts=None, log_path=None):
             val_loader,
             cfg,
         )
-        best_acc, knn_acc = trainer.train()
+        best_acc, knn_acc = trainer.train(repetition_id=i)
         best_acc_l.append(float(best_acc))
         knn_acc_l.append(float(knn_acc))
 
@@ -349,6 +354,9 @@ if __name__ == "__main__":
     cfg.merge_from_file(args.cfg)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
+    os.environ["CUDA_VISIBLE_DEVICES"] = cfg.EXPERIMENT.GPU_IDS
+    # print available GPUs
+    logger.info("Available GPUs: {}".format(torch.cuda.device_count()))
 
     if cfg.EXPERIMENT.EVAL_ONLY == True:
         if cfg.EXPERIMENT.EVAL_LINEAR == True:
@@ -362,5 +370,5 @@ if __name__ == "__main__":
         if cfg.EXPERIMENT.EVAL_NEXT == True:
             if cfg.EXPERIMENT.EVAL_LINEAR == True:
                 linear_eval(cfg, ckpts, log_path)
-            if cfg.EXPERIMNET.EVAL_SEMI == True:
+            if cfg.EXPERIMENT.EVAL_SEMI == True:
                 semi_eval(cfg, ckpts, log_path)

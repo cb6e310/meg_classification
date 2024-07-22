@@ -76,7 +76,7 @@ class EquimodTrainer:
                 if not os.path.exists(self.log_path):
                     os.makedirs(self.log_path)
                 save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-                os.mkdir(os.path.join(self.log_path, "checkpoints"))
+                os.makedirs(os.path.join(self.log_path, "checkpoints"), exist_ok=True)
                 chosen_chkp = None
                 logger.info("Start from scratch.")
 

@@ -50,8 +50,8 @@ class BaseTrainer:
 
         username = getpass.getuser()
         # init loggers
-        cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-        experiment_name = experiment_name + "_" + cur_time
+        # cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+        # experiment_name = experiment_name + "_" + cur_time
         self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
         if not os.path.exists(self.log_path):
             os.makedirs(self.log_path)
@@ -59,7 +59,7 @@ class BaseTrainer:
 
         if not cfg.EXPERIMENT.RESUME:
             save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-            os.mkdir(os.path.join(self.log_path, "checkpoints"))
+            os.makedirs(os.path.join(self.log_path, "checkpoints"), exist_ok=True)
 
         # Choose here if you want to start training from a previous snapshot (None for new training)
         if cfg.EXPERIMENT.RESUME:

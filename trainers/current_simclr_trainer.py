@@ -66,19 +66,18 @@ class CurrentSimCLRTrainer:
         self.resume_epoch = -1
 
         self.current_epoch = 0
+        self.current_ckpt=''
 
         username = getpass.getuser()
         # init loggers
         if not cfg.EXPERIMENT.DEBUG:
 
             if not cfg.EXPERIMENT.RESUME:
-                cur_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-                experiment_name = experiment_name + "_" + cur_time
                 self.log_path = os.path.join(cfg.LOG.PREFIX, experiment_name)
                 if not os.path.exists(self.log_path):
                     os.makedirs(self.log_path)
                 save_cfg(self.cfg, os.path.join(self.log_path, "config.yaml"))
-                os.mkdir(os.path.join(self.log_path, "checkpoints"))
+                os.makedirs(os.path.join(self.log_path, "checkpoints"), exist_ok=True)
                 chosen_chkp = None
                 logger.info("Start from scratch.")
 
@@ -259,7 +258,7 @@ class CurrentSimCLRTrainer:
                 )
             )
             writer.write(os.linesep + "-" * 25 + os.linesep)
-        return self.best_acc
+        return self.best_acc, self.current_ckpt
 
     def train_epoch(self, epoch, repetition_id=0):
         lr = self.cfg.SOLVER.LR
@@ -349,6 +348,7 @@ class CurrentSimCLRTrainer:
                     "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
                 )
                 torch.save(state, chkp_path)
+                self.current_ckpt=chkp_path
 
         # save best checkpoint with loss or accuracy
         if self.cfg.EXPERIMENT.TASK != "pretext":
@@ -372,15 +372,15 @@ class CurrentSimCLRTrainer:
         loss_orthogonal = torch.tensor(0, dtype=torch.float32).cuda()
         loss_pred = torch.tensor(0, dtype=torch.float32).cuda()
         process_imgs = torch.tensor(0, dtype=torch.float32).cuda()
-        # _, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = self.rec_step(
-        #     x
-        # )
+        _, loss_rec_spec, loss_rec_normal, loss_orthogonal, process_imgs = self.rec_step(
+            x
+        )
 
         loss_total_rec = loss_rec_spec + loss_rec_normal
 
         loss_clr = self.clr_step(x)
 
-        # loss_pred = self.pred_step(x)
+        loss_pred = self.pred_step(x)
 
         # loss_cls = self.cls_step(x)
 

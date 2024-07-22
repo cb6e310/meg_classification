@@ -260,32 +260,51 @@ class InfoNCE(nn.Module):
         loss = torch.mean(-torch.log(sim_match / (torch.sum(sim_mat, dim=-1) - norm_sum)))
         return loss
 
+# class OrthLoss(nn.Module):
+
+#     def __init__(self):
+#         super(OrthLoss, self).__init__()
+#         self.criterion = nn.CosineSimilarity(dim=1)
+#     def forward(self, input1, input2):
+#         # Zero mean
+#         # input1 = torch.flatten(input1, start_dim=1)
+#         # input2 = torch.flatten(input2, start_dim=1)
+#         input1 = F.adaptive_avg_pool2d(input1, (1, 1)).squeeze()
+#         input2 = F.adaptive_avg_pool2d(input2, (1, 1)).squeeze()
+#         input1 = torch.squeeze(input1)
+#         input2 = torch.squeeze(input2)
+#         diff_loss = 1 - self.criterion(input1, input2).pow(2).mean()
+#         # input1_mean = torch.mean(input1, dim=0, keepdims=True)
+#         # input2_mean = torch.mean(input2, dim=0, keepdims=True)
+#         # input1 = input1 - input1_mean
+#         # input2 = input2 - input2_mean
+
+#         # input1_l2_norm = torch.norm(input1, p=2, dim=1, keepdim=True).detach()
+#         # input1_l2 = input1.div(input1_l2_norm.expand_as(input1) + 1e-6)
+
+#         # input2_l2_norm = torch.norm(input2, p=2, dim=1, keepdim=True).detach()
+#         # input2_l2 = input2.div(input2_l2_norm.expand_as(input2) + 1e-6)
+
+#         # diff_loss = torch.mean((input1_l2.t().mm(input2_l2)).pow(2))
+#         # # diff_loss = torch.mean((input1_l2 * input2_l2).sum(dim=1).pow(2))
+
+#         return diff_loss
 class OrthLoss(nn.Module):
 
     def __init__(self):
         super(OrthLoss, self).__init__()
         self.criterion = nn.CosineSimilarity(dim=1)
+        self.margin = 1
+
     def forward(self, input1, input2):
-        # Zero mean
-        # input1 = torch.flatten(input1, start_dim=1)
-        # input2 = torch.flatten(input2, start_dim=1)
         input1 = F.adaptive_avg_pool2d(input1, (1, 1)).squeeze()
         input2 = F.adaptive_avg_pool2d(input2, (1, 1)).squeeze()
         input1 = torch.squeeze(input1)
         input2 = torch.squeeze(input2)
-        diff_loss = 1 - self.criterion(input1, input2).pow(2).mean()
-        # input1_mean = torch.mean(input1, dim=0, keepdims=True)
-        # input2_mean = torch.mean(input2, dim=0, keepdims=True)
-        # input1 = input1 - input1_mean
-        # input2 = input2 - input2_mean
+        input1 = F.normalize(input1, p=2, dim=1)
+        input2 = F.normalize(input2, p=2, dim=1)
+        # distance = F.pairwise_distance(input1, input2)
+        distance = torch.cdist(input1, input2)
+        contrastive_loss = torch.mean(torch.clamp(self.margin - distance, min=0.0))
 
-        # input1_l2_norm = torch.norm(input1, p=2, dim=1, keepdim=True).detach()
-        # input1_l2 = input1.div(input1_l2_norm.expand_as(input1) + 1e-6)
-
-        # input2_l2_norm = torch.norm(input2, p=2, dim=1, keepdim=True).detach()
-        # input2_l2 = input2.div(input2_l2_norm.expand_as(input2) + 1e-6)
-
-        # diff_loss = torch.mean((input1_l2.t().mm(input2_l2)).pow(2))
-        # # diff_loss = torch.mean((input1_l2 * input2_l2).sum(dim=1).pow(2))
-
-        return diff_loss
+        return contrastive_loss

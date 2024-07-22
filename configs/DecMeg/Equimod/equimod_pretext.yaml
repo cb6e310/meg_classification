@@ -1,39 +1,39 @@
 EXPERIMENT:
-  NAME: "byol_pretext"
-  TAG: "baselines"
+  NAME: "equimod_pretext"
+  TAG: "proposed"
   PROJECT: "baseline project"
-  DEBUG: False
+  DEBUG: False 
+  LOG_IMAGES: False
   REPETITION_NUM: 3 # Number of repetition times
   TASK: "pretext"
-  LOG_IMAGES: False
-  RESUME : False  # Resume training
-  CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
-  CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
+  RESUME : False # Resume training
+  CHECKPOINT : "proposed project/current_pretext_2024-05-25_11-14-32" # 'Log_2020-03-19_19-53-27'
+  CHKP_IDX : 9  # Choose index of checkpoint to start from. If None, uses the latest chkp
   CHECKPOINT_GAP: 10
   SEED: 42
   KNN: True
-  EVAL_ONLY: False 
+  EVAL_ONLY: True
   EVAL_NEXT: True
   EVAL_LINEAR: False
   EVAL_SEMI: True
-  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/byol_pretext_2024-07-10_08-20-43"
+  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/equimod_pretext_2024-07-20_03-02-49"
 DATASET:
   ROOT: "/home/song/datasets/MEG"
-  TYPE: "CamCAN"
+  TYPE: "DecMeg"
   CHANNELS: 204
-  POINTS: 100
+  POINTS: 250
   NUM_CLASSES: 2
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "BYOL"
+  TYPE: "Equimod"
   ARGS:
     BACKBONE: "varcnn"
     SIAMESE: True
-    USE_MOMENTUM: False # True for BYOL, False for SimSiam
-    PROJECTION_DIM: 128
+    USE_MOMENTUM: True  # True for BYOL, False for SimSiam
     HIDDEN_LAYER: -1
-    N_FEATURES: 9000
+    PROJECTION_DIM: 512
+    N_FEATURES: 22500
     PROJECTION_HIDDEN_SIZE: 4096
     TAU_BASE: 0.996
     WARMUP_EPOCHS: -1
@@ -45,7 +45,7 @@ MODEL:
     TYPE: "RegressionLoss"
       # SOURCE_CHANNELS: 36
 SOLVER:
-  TRAINER: "BYOL"
+  TRAINER: "equimod"
   BATCH_SIZE: 512
   EPOCHS: 10
   LR: 0.05
@@ -56,7 +56,7 @@ SOLVER:
 EVAL_LINEAR:
   CLASSIFIER: "LinearClassifier"
   BATCH_SIZE: 512
-  EPOCHS: 200
+  EPOCHS: 100
   LR: 0.5
   CRITERION: "CE"
   SCHEDULER:
@@ -64,4 +64,5 @@ EVAL_LINEAR:
     GAMMA: 0.99
     MIN_LR: 0.001
 EVAL_SEMI:
-  DATA_PATH: "/home/song/datasets/MEG/CamCAN/semi_train"
+  DATA_PATH: "/home/song/datasets/MEG/DecMeg/semi_train"
+

@@ -14,8 +14,9 @@ EXPERIMENT:
   KNN: True
   EVAL_ONLY: False
   EVAL_NEXT: True
-  EVAL_LINEAR: True
-  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/InfoTS_Pretrain_2024-07-04_11-20-21"
+  EVAL_LINEAR: False
+  EVAL_SEMI: True
+  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/byol_pretext_2024-07-10_08-30-02"
 DATASET:
   ROOT: "/home/song/datasets/EEG"
   TYPE: "deap"
@@ -25,27 +26,27 @@ DATASET:
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "CurrentCLR"
+  TYPE: "BYOL"
   ARGS:
     BACKBONE: "varcnn"
     SIAMESE: True
-    USE_MOMENTUM: True # True for BYOL, False for SimSiam
+    USE_MOMENTUM: False # True for BYOL, False for SimSiam
     PROJECTION_DIM: 128
     HIDDEN_LAYER: -1
     PROJECTION_HIDDEN_SIZE: 4096
     TAU_BASE: 0.996
-    N_FEATURES: 23040
+    N_FEATURES: 11520
     WARMUP_EPOCHS: -1
     REC_WEIGHT: 1
     CLS_WEIGHT: 0.1
     PRED_WEIGHT: 0.1
-    SOURCE_CHANNELS: 360
+    SOURCE_CHANNELS: 180
   CRITERION:
     TYPE:
       "RegressionLoss"
       # SOURCE_CHANNELS: 36
 SOLVER:
-  TRAINER: "current"
+  TRAINER: "BYOL"
   BATCH_SIZE: 512
   EPOCHS: 10
   LR: 0.01
@@ -63,3 +64,5 @@ EVAL_LINEAR:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
     MIN_LR: 0.001
+EVAL_SEMI:
+  DATA_PATH: "/home/song/datasets/EEG/deap/semi_train"

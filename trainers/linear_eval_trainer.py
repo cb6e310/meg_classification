@@ -53,6 +53,7 @@ class LinearEvalTrainer:
         self.best_acc = -1
         self.best_epoch = 0
         self.resume_epoch = -1
+        
 
         self.train_feat_loader, self.val_feat_loader = self.get_features(
             self.model, train_loader, val_loader
@@ -141,19 +142,17 @@ class LinearEvalTrainer:
             with torch.no_grad():
                 if self.cfg.MODEL.ARGS.BACKBONE == "eegconvnet":
                     h = self.model(x, x, return_embedding=True, return_projection=False)
-                    
-                    
+
                 elif self.cfg.MODEL.ARGS.BACKBONE == "varcnn":
                     h = self.model(x, x, return_embedding=True, return_projection=False)
-                    
-                    
+
                 elif "resnet" in self.cfg.MODEL.ARGS.BACKBONE:
                     h = self.model(x, x, return_embedding=True, return_projection=False)
 
                 elif "TSEncoder" in self.cfg.MODEL.ARGS.BACKBONE:
                     h = self.model(x)
             h = h.detach()
-            h=h.squeeze()
+            h = h.squeeze()
             feature_vector.extend(h.cpu().detach().numpy())
             labels_vector.extend(y.numpy())
 
@@ -188,7 +187,7 @@ class LinearEvalTrainer:
 
     def train(self, repetition_id=0):
         epoch = 0
-        if self.cfg.EXPERIMENT.KNN==True:
+        if self.cfg.EXPERIMENT.KNN == True:
             knn_acc = KNN_validate(self.train_feat_loader, self.val_feat_loader)
             logger.info("KNN accuracy: {}".format(knn_acc))
         if self.resume_epoch != -1:
@@ -241,7 +240,7 @@ class LinearEvalTrainer:
         pbar.close()
 
         # validate
-        test_acc, test_loss = self.validate()
+        test_acc, test_loss = self.validate(epoch, repetition_id)
 
         # log
         log_dict = OrderedDict(
@@ -275,7 +274,6 @@ class LinearEvalTrainer:
             )
             torch.save(state, chkp_path)
 
-
     def train_iter(self, data, epoch, train_meters, data_itx: int = 0):
         self.optimizer.zero_grad()
         train_start_time = time.time()
@@ -293,7 +291,7 @@ class LinearEvalTrainer:
         loss = self.criterion(preds, target)
         loss = loss.mean()
 
-        l1_reg = torch.tensor(0.).cuda()
+        l1_reg = torch.tensor(0.0).cuda()
         for param in self.model.parameters():
             l1_reg += torch.norm(param, 1)
         loss += self.lambda_l1 * l1_reg
@@ -314,7 +312,7 @@ class LinearEvalTrainer:
         )
         return msg
 
-    def validate(self):
+    def validate(self, epoch, repetition_id=0):
         batch_time, losses, top1 = [AverageMeter() for _ in range(3)]
         num_iter = len(self.val_feat_loader)
         pbar = tqdm(range(num_iter))
@@ -343,4 +341,24 @@ class LinearEvalTrainer:
             pbar.update()
         pbar.close()
         self.classifier.train()
+        if self.best_acc<top1.avg:
+            self.best_acc=top1.avg
+            self.best_epoch=epoch
+            state = {
+                "epoch": epoch,
+                "model_state_dict": self.classifier.state_dict(),
+                "model": self.cfg.MODEL.TYPE,
+                "optimizer": self.optimizer.state_dict(),
+                "scheduler": self.scheduler.state_dict(),
+                "best_acc": self.best_acc,
+                "dataset": self.cfg.DATASET.TYPE,
+            }
+
+            logger.info("Saving best checkpoint to {}".format(self.log_path))
+            chkp_path = os.path.join(
+                self.log_path,
+                "checkpoints",
+                "linear_eval_best_{}_chkp.tar".format(repetition_id),
+            )
+            torch.save(state, chkp_path)
         return top1.avg, losses.avg

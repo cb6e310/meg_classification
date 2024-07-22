@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 import torch
 import torch.nn.functional as F
+
 import torch.optim as optim
 from torch.utils.data.dataloader import DataLoader
 from torchvision.utils import make_grid
@@ -66,7 +67,7 @@ class CurrentTrainer:
         self.resume_epoch = -1
 
         self.current_epoch = 0
-        self.current_ckpt=""
+        self.current_ckpt = ""
 
         username = getpass.getuser()
         # init loggers
@@ -328,8 +329,8 @@ class CurrentTrainer:
         )
         if not self.cfg.EXPERIMENT.DEBUG:
             self.log_worklog(epoch, log_dict)
-        # saving checkpoint
-        # saving occasional checkpoints
+            # saving checkpoint
+            # saving occasional checkpoints
 
             state = {
                 "epoch": epoch,
@@ -350,7 +351,7 @@ class CurrentTrainer:
                     "epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
                 )
                 torch.save(state, chkp_path)
-                self.current_ckpt=chkp_path
+                self.current_ckpt = chkp_path
 
         # save best checkpoint with loss or accuracy
         if self.cfg.EXPERIMENT.TASK != "pretext":
@@ -382,7 +383,7 @@ class CurrentTrainer:
 
         loss_clr = self.clr_step(x)
 
-        loss_pred = self.pred_step(x)
+        loss_pred = self.pred_step(x, regularization=True)
 
         # loss_cls = self.cls_step(x)
 
@@ -483,9 +484,7 @@ class CurrentTrainer:
             inv_representation_1,
             acs_representation_2,
             acs_representation_1,
-        ) = self.model(
-            step="rec", rec_batch_view_1=aug_1, rec_batch_view_2=aug_2
-        )
+        ) = self.model(step="rec", rec_batch_view_1=aug_1, rec_batch_view_2=aug_2)
 
         loss_rec_spec = self.rec_criterion(rec_spec_batch_one, aug_1)
         +self.rec_criterion(rec_spec_batch_two, aug_1)
@@ -493,13 +492,12 @@ class CurrentTrainer:
         loss_rec_normal = self.rec_criterion(rec_normal_batch_one, aug_2)
         +self.rec_criterion(rec_normal_batch_two, aug_2)
 
-        loss_orthogonal=self.orthogonal_criterion(inv_representation_1, acs_representation_1)
-        +self.orthogonal_criterion(inv_representation_2,acs_representation_2)
-
-        loss_total = (
-            self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_spec)
-            + loss_orthogonal
+        loss_orthogonal = self.orthogonal_criterion(
+            inv_representation_1, acs_representation_1
         )
+        +self.orthogonal_criterion(inv_representation_2, acs_representation_2)
+
+        loss_total = self.cfg.MODEL.ARGS.REC_WEIGHT * (loss_rec_spec) + loss_orthogonal
 
         # backward
         self.optimizer.zero_grad()
@@ -544,7 +542,7 @@ class CurrentTrainer:
         ) + self.clr_criterion(clr_online_pred_two, clr_target_proj_one)
 
         loss_clr = loss_clr.mean()
-        l1_reg = torch.tensor(0.).cuda()
+        l1_reg = torch.tensor(0.0).cuda()
         for param in self.model.parameters():
             l1_reg += torch.norm(param, 1)
         loss_clr += self.lambda_l1 * l1_reg
@@ -582,7 +580,7 @@ class CurrentTrainer:
 
     #     return loss_cls
 
-    def pred_step(self, x):
+    def pred_step(self, x, regularization=False):
         # pred step
         self.optimizer.zero_grad()
         x = x.float().cuda()
@@ -596,11 +594,22 @@ class CurrentTrainer:
 
         loss_pred = self.pred_criterion(pred_online_pred, labels)
 
+
+        if regularization == True:
+    
+            new_weights = F.softmax(loss_pred)
+            
+            rand_tensor = torch.rand_like(new_weights)
+            
+            loss_pred = new_weights * loss_pred - F.kl_div(new_weights, rand_tensor)
+
         loss_pred = loss_pred.mean()
+
         loss_pred = loss_pred * self.cfg.MODEL.ARGS.PRED_WEIGHT
 
         # backward
         self.optimizer.zero_grad()
+        # loss_pred=loss_pred.long()
         loss_pred.backward()
         self.optimizer.step()
 

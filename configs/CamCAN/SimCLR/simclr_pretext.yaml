@@ -3,14 +3,19 @@ EXPERIMENT:
   TAG: "baselines"
   PROJECT: "baseline project"
   DEBUG: False
-  REPETITION_NUM: 1 # Number of repetition times
+  REPETITION_NUM: 3 # Number of repetition times
   TASK: "pretext"
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
   CHECKPOINT_GAP: 10
-  SEED: 44
-  GPU_ID: "0"
+  SEED: 42
+  KNN: True
+  EVAL_ONLY: True
+  EVAL_NEXT: True
+  EVAL_LINEAR: True
+  EVAL_SEMI: False
+  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/simclr_with_NTXent_2024-07-16_06-14-31"
 DATASET:
   ROOT: "/home/song/datasets/MEG"
   TYPE: "CamCAN"
@@ -36,10 +41,23 @@ MODEL:
       # SOURCE_CHANNELS: 36
 SOLVER:
   BATCH_SIZE: 512
-  EPOCHS: 300
+  EPOCHS: 10
   LR: 0.05
   SCHEDULER:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
     MIN_LR: 0.0001
+EVAL_LINEAR:
+  CLASSIFIER: "LinearClassifier"
+  BATCH_SIZE: 512
+  EPOCHS: 100
+  LR: 0.5
+  CRITERION: "CE"
+  SCHEDULER:
+    TYPE: "ExponentialLR"
+    GAMMA: 0.99
+    MIN_LR: 0.001
+EVAL_SEMI:
+  DATA_PATH: "/home/song/datasets/MEG/CamCAN/semi_train"
+  SAVE_CKPT: True
 

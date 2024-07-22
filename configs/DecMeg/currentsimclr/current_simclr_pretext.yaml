@@ -12,46 +12,48 @@ EXPERIMENT:
   CHECKPOINT_GAP: 10
   SEED: 42
   KNN: True
-  EVAL_ONLY: False
+  EVAL_ONLY: True
   EVAL_NEXT: True
   EVAL_LINEAR: True
-  EVAL_SEMI: False
-  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/proposed project/current_pretext_2024-07-08_13-08-55"
+  EVAL_SEMI: True
+  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/proposed project/current_pretext_2024-07-21_11-22-24"
 DATASET:
   ROOT: "/home/song/datasets/MEG"
-  TYPE: "CamCAN"
+  TYPE: "DecMeg"
   CHANNELS: 204
-  POINTS: 100
+  POINTS: 250
   NUM_CLASSES: 2
   TEST:
     BATCH_SIZE: 128
 MODEL:
-  TYPE: "CurrentCLR"
+  TYPE: "CurrentSimCLR"
   ARGS:
+    PROJECTION_DIM: 128
+    N_FEATURES: 4500
+    PROJECTION_HIDDEN_SIZE: 4096
+    SOURCE_CHANNELS: 36
     BACKBONE: "varcnn"
+    TEMPERATURE: 0.5
     SIAMESE: True
     USE_MOMENTUM: True  # True for BYOL, False for SimSiam
-    HIDDEN_LAYER: -1
-    PROJECTION_DIM: 128
-    PROJECTION_HIDDEN_SIZE: 4096
-    N_FEATURES: 18000
     TAU_BASE: 0.996
     WARMUP_EPOCHS: -1
     REC_WEIGHT: 1
     CLS_WEIGHT: 0.1
-    PRED_WEIGHT: 0.1
-    SOURCE_CHANNELS: 360
+    PRED_WEIGHT: 1
   CRITERION:
-    TYPE: "RegressionLoss"
+    TYPE: "NT_Xent"
+    ARGS:
+      TEMPERATURE: 0.5
       # SOURCE_CHANNELS: 36
 SOLVER:
-  TRAINER: "current"
-  BATCH_SIZE: 512
+  TRAINER: "currentsimclr"
+  BATCH_SIZE: 400
   EPOCHS: 10
-  LR: 0.05
+  LR: 0.001
   SCHEDULER:
     TYPE: "ExponentialLR"
-    GAMMA: 0.99
+    GAMMA: 0.9
     MIN_LR: 0.0001
 EVAL_LINEAR:
   CLASSIFIER: "LinearClassifier"
@@ -64,5 +66,5 @@ EVAL_LINEAR:
     GAMMA: 0.99
     MIN_LR: 0.001
 EVAL_SEMI:
-  DATA_PATH: "/home/song/datasets/MEG/CamCAN/semi_train"
-  SAVE_CKPT: True
+  DATA_PATH: "/home/song/datasets/MEG/DecMeg/semi_train"
+  SAVE_CKPT: False

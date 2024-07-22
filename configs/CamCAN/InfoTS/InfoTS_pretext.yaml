@@ -8,13 +8,14 @@ EXPERIMENT:
   RESUME : False  # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
-  CHECKPOINT_GAP: 5
+  CHECKPOINT_GAP: 10
   SEED: 42
   KNN: True
-  EVAL_ONLY: False
+  EVAL_ONLY: True
   EVAL_NEXT: True
-  EVAL_LINEAR: True
-  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/InfoTS_Pretrain_2024-07-04_11-20-21"
+  EVAL_LINEAR: False
+  EVAL_SEMI: True
+  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/InfoTS_Pretrain_2024-07-08_06-29-37"
 DATASET:
   ROOT: "/home/song/datasets/MEG"
   TYPE: "CamCAN"
@@ -50,7 +51,7 @@ SOLVER:
     MIN_LR: 0.0001
 EVAL_LINEAR:
   CLASSIFIER: "LinearClassifier"
-  BATCH_SIZE: 512
+  BATCH_SIZE: 128
   EPOCHS: 200
   LR: 0.5
   CRITERION: "CE"
@@ -58,3 +59,5 @@ EVAL_LINEAR:
     TYPE: "ExponentialLR"
     GAMMA: 0.99
     MIN_LR: 0.001
+EVAL_SEMI:
+  DATA_PATH: "/home/song/datasets/MEG/CamCAN/semi_train"

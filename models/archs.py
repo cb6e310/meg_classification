@@ -741,13 +741,15 @@ class CurrentNetWrapper(nn.Module):
         assert hidden is not None, f"hidden layer {self.layer} never emitted an output"
         return hidden
 
-    def forward(self, x, return_projection=True):
+    def forward(self, x, return_projection=True, visualize=False):
         representations = self.get_representation(x)
         representation = representations[0]
         inv4rec = representations[1][0]
         inv4clr = representations[1][1]
         acs = representations[2]
         # logger.debug(representation.shape)
+        if visualize:
+            return representation[1], representations[1][1], representations[2][1]
         if not return_projection:
             return representation, inv4rec, acs
 
@@ -861,6 +863,7 @@ class CurrentCLR(BaseNet):
         update_moving_average(
             self.target_ema_updater, self.target_encoder, self.online_encoder
         )
+    
 
     def forward(
         self,
@@ -965,28 +968,39 @@ class CurrentCLR(BaseNet):
             pred_output = self.pred_fc(pred_representation)
             return pred_output
 
+        elif step == "visualize":
+            main_representation, inv_representation, acs_representation = self.online_encoder(
+                clr_batch_view_1, visualize=True
+            )
+            return main_representation, inv_representation, acs_representation
+
         else:
             # linear evaluation
             if return_embedding:
                 return self.online_encoder(clr_batch_view_1, return_projection=False)[0][
                     1
                 ]
+        
 
 
 class CurrentSimCLR(BaseNet):
     def __init__(self, cfg):
         super(CurrentSimCLR, self).__init__(cfg)
-        input_channels = cfg.DATASET.CHANNELS
+        feature_size = cfg.DATASET.POINTS
+        channels = cfg.DATASET.CHANNELS
         num_classes = cfg.DATASET.NUM_CLASSES
+        projection_size = cfg.MODEL.ARGS.PROJECTION_DIM
+        n_feature = cfg.MODEL.ARGS.N_FEATURES
 
         backbone_name = cfg.MODEL.ARGS.BACKBONE
         projection_dim = cfg.MODEL.ARGS.PROJECTION_DIM
+
         n_features = cfg.MODEL.ARGS.N_FEATURES
 
         if "resnet" in backbone_name:
             self.backbone = backbone_dict[backbone_name][0](pretrained=False)
             self.backbone.conv1 = nn.Conv2d(
-                input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+                channels, 64, kernel_size=3, stride=1, padding=1, bias=False
             )
             self.projection_head = nn.Sequential(
                 nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features),
@@ -1002,7 +1016,8 @@ class CurrentSimCLR(BaseNet):
 
         # regressive head
         self.pred_fc = nn.Sequential(
-            nn.Linear(projection_dim, 128),
+            nn.Linear(projection_size if "varcnn" not in 
+                    self.cfg.MODEL.ARGS.BACKBONE else n_feature , 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.Linear(128, 64),
@@ -1012,11 +1027,15 @@ class CurrentSimCLR(BaseNet):
         )
 
         self.decoder = ConvDecoder(
-            input_channels=projection_dim,
+            input_channels=(
+                projection_size if "varcnn" not in 
+                    self.cfg.MODEL.ARGS.BACKBONE else 36
+            ),
             filter_size=3,
-            channels=input_channels,
-            length=cfg.DATASET.POINTS,
+            channels=channels,
+            length=feature_size,
         )
+
         # self.criterion = contrastive_loss(cfg)
 
         # self.fc = nn.Linear(projection_dim, num_classes)
@@ -1119,7 +1138,7 @@ class CurrentSimCLR(BaseNet):
         else:
             # linear evaluation
             if return_embedding:
-                return self.backbone(clr_batch_view_1)
+                return self.backbone(clr_batch_view_1)[0][1]
 
 class Equimod(BaseNet):
     def __init__(self, cfg):

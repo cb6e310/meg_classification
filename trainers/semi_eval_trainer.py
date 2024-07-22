@@ -45,6 +45,7 @@ class FinetuneWrapper(torch.nn.Module):
 class SemiEvalTrainer:
     def __init__(
         self,
+        frac,
         experiment_name,
         model,
         classifier,
@@ -53,6 +54,7 @@ class SemiEvalTrainer:
         val_loader,
         cfg,
     ):
+        self.frac = frac
         self.cfg = cfg
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -212,24 +214,24 @@ class SemiEvalTrainer:
         # saving checkpoint
         # saving occasional checkpoints
 
-        # state = {
-        #     "epoch": epoch,
-        #     "model_state_dict": self.model.state_dict(),
-        #     "model": self.cfg.MODEL.TYPE,
-        #     "optimizer": self.optimizer.state_dict(),
-        #     "scheduler": self.scheduler.state_dict(),
-        #     "best_acc": self.best_acc,
-        #     "dataset": self.cfg.DATASET.TYPE,
-        # }
+        state = {
+            "epoch": epoch,
+            "model_state_dict": self.model.state_dict(),
+            "model": self.cfg.MODEL.TYPE,
+            "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.scheduler.state_dict(),
+            "best_acc": self.best_acc,
+            "dataset": self.cfg.DATASET.TYPE,
+        }
 
-        # if (epoch + 1) % self.cfg.EXPERIMENT.CHECKPOINT_GAP == 0:
-        #     logger.info("Saving checkpoint to {}".format(self.log_path))
-        #     chkp_path = os.path.join(
-        #         self.log_path,
-        #         "checkpoints",
-        #         "semi_eval_epoch_{}_{}_chkp.tar".format(epoch, repetition_id),
-        #     )
-        #     torch.save(state, chkp_path)
+        if (epoch + 1) % self.cfg.EVAL_SEMI.SAVE_CKPT_GAP== 0 and self.cfg.EVAL_SEMI.SAVE_CKPT:
+            logger.info("Saving checkpoint to {}".format(self.log_path))
+            chkp_path = os.path.join(
+                self.log_path,
+                "checkpoints",
+                "semi_eval_{}p_epoch_{}_{}_chkp.tar".format(self.frac, epoch, repetition_id),
+            )
+            torch.save(state, chkp_path)
 
     def train_iter(self, data, epoch, train_meters, data_itx: int = 0):
         self.optimizer.zero_grad()

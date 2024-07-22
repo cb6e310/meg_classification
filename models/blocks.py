@@ -12,6 +12,8 @@ from utils.helpers import timing_start, timing_end
 from loguru import logger
 
 
+def default(val, def_val):
+    return def_val if val is None else val
 def MaybeSyncBatchnorm(is_distributed=None):
     is_distributed = default(
         is_distributed, dist.is_initialized() and dist.get_world_size() > 1
@@ -36,7 +38,7 @@ class PrintLayer(nn.Module):
         return x
 
 
-# define torch.Tensor.view in torch.nn
+
 class TensorView(nn.Module):
     def __init__(self):
         super(TensorView, self).__init__()

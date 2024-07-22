@@ -3,19 +3,19 @@ EXPERIMENT:
   TAG: "baselines"
   PROJECT: "baseline project"
   DEBUG: False
-  REPETITION_NUM: 2 # Number of repetition times
+  REPETITION_NUM: 3 # Number of repetition times
   TASK: "pretext"
   RESUME : False # Resume training
   CHECKPOINT : "" # 'Log_2020-03-19_19-53-27'
   CHKP_IDX : None  # Choose index of checkpoint to start from. If None, uses the latest chkp
-  CHECKPOINT_GAP: 1
+  CHECKPOINT_GAP: 10
   SEED: 42
   KNN: True
   EVAL_ONLY: True
   EVAL_NEXT: True
   EVAL_LINEAR: False
   EVAL_SEMI: True
-  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/byol_pretext_2024-07-10_06-55-09"
+  PRETRAINED_PATH: "/home/song/code/current/meg_classification/ssl/results/baseline project/byol_pretext_2024-07-17_01-48-07"
 DATASET:
   ROOT: "/home/song/datasets/EEG"
   TYPE: "sleepedf20"
@@ -29,7 +29,7 @@ MODEL:
   ARGS:
     BACKBONE: "eegconvnet"
     SIAMESE: True
-    USE_MOMENTUM: True # True for BYOL, False for SimSiam
+    USE_MOMENTUM: False # True for BYOL, False for SimSiam
     HIDDEN_LAYER: -1
     PROJECTION_DIM: 256
     N_FEATURES: 256
@@ -42,7 +42,7 @@ MODEL:
 SOLVER:
   TRAINER: "BYOL"
   BATCH_SIZE: 512
-  EPOCHS: 1
+  EPOCHS: 10
   LR: 0.0001
   SCHEDULER:
     TYPE: "ExponentialLR"
@@ -51,7 +51,7 @@ SOLVER:
 EVAL_LINEAR:
   CLASSIFIER: "LinearClassifier"
   BATCH_SIZE: 512
-  EPOCHS: 2
+  EPOCHS: 100
   LR: 0.5
   CRITERION: "CE"
   SCHEDULER:
